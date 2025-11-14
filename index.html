@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent GPS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3e%3cdefs%3e%3clinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3e%3cstop offset='0%25' style='stop-color:%233B82F6;stop-opacity:1' /%3e%3cstop offset='100%25' style='stop-color:%2338B2AC;stop-opacity:1' /%3e%3c/linearGradient%3e%3c/defs%3e%3cpath d='M50 15 L58 42 L85 50 L58 58 L50 85 L42 58 L15 50 L42 42 Z' fill='url(%23grad)' /%3e%3c/svg%3e" />
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700&family=Roboto:wght@400&display=swap" rel="stylesheet">
+    <style>
+      /* Light theme (default) */
+      :root {
+        --font-heading: 'Poppins', sans-serif;
+        --font-body: 'Roboto', sans-serif;
+        
+        --color-bg: #F8F9FA;
+        --color-surface: #FFFFFF;
+        --color-text-primary: #1A202C;
+        --color-text-secondary: #4A5568;
+        --color-accent: #3B82F6; /* A vibrant blue for great contrast in both themes */
+        --color-accent-text: #FFFFFF;
+        --color-accent-secondary: #38B2AC;
+        --color-border: #E2E8F0;
+        --color-input-bg: #EDF2F7;
+        --color-destructive: #E53E3E;
+        --color-on-destructive: #FFFFFF;
+        --color-destructive-surface: #FED7D7;
+        --color-success: #38A169;
+        --color-on-success: #FFFFFF;
+        --color-success-surface: #C6F6D5;
+        --color-warning: #D69E2E;
+        --color-on-warning: #1A202C;
+        --color-warning-surface: #FEEBC8;
+      }
+
+      /* Dark theme */
+      html.dark {
+        --color-bg: #1A202C;
+        --color-surface: #2D3748;
+        --color-text-primary: #F7FAFC;
+        --color-text-secondary: #A0AEC0;
+        --color-accent-secondary: #4FD1C5;
+        --color-border: #4A5568;
+        --color-input-bg: #4A5568;
+        --color-destructive: #FC8181;
+        --color-on-destructive: #1A202C;
+        --color-destructive-surface: #4A2121;
+        --color-success: #68D391;
+        --color-on-success: #1A202C;
+        --color-success-surface: #254E38;
+        --color-warning: #F6E05E;
+        --color-on-warning: #1A202C;
+        --color-warning-surface: #544214;
+      }
+
+      html, body, #root {
+        height: 100%;
+      }
+      body {
+        font-family: var(--font-body);
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      h1, h2, h3, h4, h5, h6, .font-heading {
+        font-family: var(--font-heading);
+      }
+      html.dark .logo-img {
+        filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255,255,255,0.5));
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+             typography: (theme) => ({
+              DEFAULT: {
+                css: {
+                  color: 'var(--color-text-primary)',
+                  a: {
+                    color: 'var(--color-accent)',
+                    '&:hover': {
+                      color: 'var(--color-accent-secondary)',
+                    },
+                  },
+                  h1: { color: 'var(--color-text-primary)' },
+                  h2: { color: 'var(--color-text-primary)' },
+                  h3: { color: 'var(--color-text-primary)' },
+                  h4: { color: 'var(--color-text-primary)' },
+                  strong: { color: 'var(--color-text-primary)' },
+                  blockquote: {
+                    color: 'var(--color-text-secondary)',
+                    borderLeftColor: 'var(--color-border)',
+                  },
+                  'ol > li::before': {
+                    color: 'var(--color-text-secondary)',
+                  },
+                  'ul > li::before': {
+                    backgroundColor: 'var(--color-text-secondary)',
+                  },
+                },
+              },
+            }),
+            fontFamily: {
+              sans: ['var(--font-body)', 'sans-serif'],
+              heading: ['var(--font-heading)', 'sans-serif'],
+            },
+            colors: {
+              background: 'var(--color-bg)',
+              surface: 'var(--color-surface)',
+              'text-primary': 'var(--color-text-primary)',
+              'text-secondary': 'var(--color-text-secondary)',
+              primary: 'var(--color-accent)',
+              accent: 'var(--color-accent)',
+              'on-accent': 'var(--color-accent-text)',
+              'accent-secondary': 'var(--color-accent-secondary)',
+              border: 'var(--color-border)',
+              input: 'var(--color-input-bg)',
+              destructive: 'var(--color-destructive)',
+              'on-destructive': 'var(--color-on-destructive)',
+              'destructive-surface': 'var(--color-destructive-surface)',
+              success: 'var(--color-success)',
+              'on-success': 'var(--color-on-success)',
+              'success-surface': 'var(--color-success-surface)',
+              warning: 'var(--color-warning)',
+              'on-warning': 'var(--color-on-warning)',
+              'warning-surface': 'var(--color-warning-surface)',
+            }
+          }
+        }
+      }
+    </script>
+  <link rel="stylesheet" href="/index.css">
+
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.5",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.552.0",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.5.0/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.3",
+    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
+    "marked": "https://aistudiocdn.com/marked@^16.4.1",
+    "dompurify": "https://aistudiocdn.com/dompurify@^3.3.0",
+    "vite": "https://aistudiocdn.com/vite@^7.1.12",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

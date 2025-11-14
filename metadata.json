@@ -1,0 +1,5 @@
+{
+  "name": "Agent GPS 1.5",
+  "description": "A basic React application demonstrating integration with the Gemini API for text generation. Provides a simple input field, a submit button, and displays the AI's response with a clean, responsive UI.",
+  "requestFramePermissions": []
+}
