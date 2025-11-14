@@ -4,7 +4,7 @@ import type { TeamMember, DailyTrackerData, HabitTrackerTemplate, HabitActivityS
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { ClipboardList, ChevronDown, ChevronUp, Download, AlertTriangle } from 'lucide-react';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -93,8 +93,35 @@ const PrintableLog: React.FC<{ data: DailyTrackerData; settings: HabitTrackerTem
                     <h2 className="text-xl font-bold border-b border-gray-300 pb-2 mb-3">Daily Metrics Log</h2>
                      <ul className="space-y-1 text-sm">
                         {settings.activities.map(activity => {
-                            const value = getMetricValue(data, activity.id);
-                            if (value > 0) return <li key={activity.id}><strong>{activity.name}:</strong> {value}</li>;
+                            let value = 0;
+                             switch(activity.id) {
+                                case 'calls':
+                                    value = data.dials || 0;
+                                    break;
+                                case 'doorsKnocked':
+                                    value = data.doorsKnocked || 0;
+                                    break;
+                                case 'knocksAnswered':
+                                    value = data.knocksAnswered || 0;
+                                    break;
+                                case 'contacts':
+                                    value = data.prospectingTotals?.contacts || 0;
+                                    break;
+                                case 'listingAptsSet':
+                                    value = data.prospectingTotals?.listingAptsSet || 0;
+                                    break;
+                                case 'buyerAptsSet':
+                                    value = data.prospectingTotals?.buyerAptsSet || 0;
+                                    break;
+                                case 'lenderAptsSet':
+                                    value = data.prospectingTotals?.lenderAptsSet || 0;
+                                    break;
+                                default:
+                                    value = data.pointsActivities?.[activity.id] || 0;
+                            }
+                            if (value > 0) {
+                                return <li key={activity.id}><strong>{activity.name}:</strong> {value}</li>;
+                            }
                             return null;
                         })}
                     </ul>
@@ -139,7 +166,7 @@ const CoachHabitLogsPage: React.FC = () => {
                 setError(null);
                 try {
                     const selectedAgent = agents.find(a => a.id === selectedAgentId);
-                    const logsCollectionRef = collection(db, 'dailyTrackers');
+                    const logsCollectionRef = collection(getFirestoreInstance(), 'dailyTrackers');
                     let logsQuery;
                     
                     if (userData.isSuperAdmin) {
@@ -162,7 +189,7 @@ const CoachHabitLogsPage: React.FC = () => {
                     setAgentLogs(logsSnapshot.docs.map(processDailyTrackerDoc));
                     
                     let settingsDoc = null;
-                    const settingsRef = collection(db, 'habitTrackerTemplates');
+                    const settingsRef = collection(getFirestoreInstance(), 'habitTrackerTemplates');
                     if (selectedAgent) {
                          const roleQuery = query(settingsRef, where('isDefaultForRole', '==', selectedAgent.role));
                          const roleSnap = await getDocs(roleQuery);
@@ -198,8 +225,70 @@ const CoachHabitLogsPage: React.FC = () => {
         fetchAgentData();
     }, [selectedAgentId, agents, userData, user]);
 
-    const handleExportAllLogs = () => { /* ... implementation as before ... */ };
-    const handleExportSingleLog = (log: DailyTrackerData) => { /* ... implementation as before ... */ };
+    const handleExportAllLogs = () => {
+        if (!agentLogs.length || !agentSettings) return;
+        setExportingAll(true);
+        const printableContainer = document.getElementById('pdf-export-all-content-coach-logs');
+        if (printableContainer) {
+            html2canvas(printableContainer, { scale: 2, useCORS: true }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'px', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const canvasAspect = canvas.width / canvas.height;
+                const imgHeight = pdfWidth / canvasAspect;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                }
+
+                pdf.save(`AgentLogs_${selectedAgentName}.pdf`);
+            }).catch(err => {
+                console.error("Error exporting all logs:", err);
+            }).finally(() => {
+                setExportingAll(false);
+            });
+        } else {
+            setExportingAll(false);
+        }
+    };
+
+    const handleExportSingleLog = (log: DailyTrackerData) => {
+        if (!agentSettings) return;
+        setLogToExport(log);
+        setExportingSingle(true);
+        // Delay to allow DOM update for printable content
+        setTimeout(() => {
+            const printableContainer = document.getElementById('pdf-printable-log-single');
+            if (printableContainer) {
+                html2canvas(printableContainer, { scale: 2, useCORS: true }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'px', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const newHeight = canvas.height * pdfWidth / canvas.width;
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, newHeight);
+                    pdf.save(`AgentLog_${selectedAgentName}_${log.date}.pdf`);
+                }).catch(err => {
+                    console.error("Error exporting single log:", err);
+                }).finally(() => {
+                    setExportingSingle(false);
+                    setLogToExport(null);
+                });
+            } else {
+                setExportingSingle(false);
+                setLogToExport(null);
+            }
+        }, 50);
+    };
+
     const selectedAgentName = agents.find(a => a.id === selectedAgentId)?.name || 'Agent';
 
     return (
@@ -227,7 +316,7 @@ const CoachHabitLogsPage: React.FC = () => {
                         <div className="flex justify-between items-center mb-4"><h2 className="text-2xl font-bold">Logs for {selectedAgentName}</h2>{agentLogs.length > 0 && <button onClick={handleExportAllLogs} disabled={exportingAll || !agentSettings} className="flex items-center justify-center bg-accent text-on-accent font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-50">{exportingAll ? <Spinner className="w-4 h-4"/> : <><Download className="mr-2" size={16} /> Export All Logs</>}</button>}</div>
                         {agentLogs.length > 0 && agentSettings ? (
                             <div className="space-y-2">{agentLogs.map(log => { const isExpanded = expandedLogId === log.id; const date = new Date(log.date); date.setUTCHours(12); const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }); return (
-                                <Card key={log.id} className="p-0 overflow-hidden"><button onClick={() => setExpandedLogId(isExpanded ? null : log.id)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5"><p className="font-bold text-text-primary">{formattedDate}</p><div className="flex items-center gap-2 text-text-secondary"><span>View Details</span><ChevronDown className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></div></button>{isExpanded && <><LogDetailView log={log} settings={agentSettings} /><div className="p-4 border-t border-border flex justify-end"><button onClick={() => handleExportSingleLog(log)} disabled={exportingSingle} className="flex items-center gap-2 text-sm font-semibold rounded-lg transition-colors px-3 py-1.5 bg-accent/20 text-accent hover:bg-accent/30">{exportingSingle && logToExport?.id === log.id ? <Spinner className="w-4 h-4"/> : <Download size={14}/>} Export Log</button></div></>}</Card>
+                                <Card key={log.id} className="p-0 overflow-hidden"><button onClick={() => setExpandedLogId(isExpanded ? null : log.id)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5"><p className="font-bold text-text-primary">{formattedDate}</p><div className="flex items-center gap-2 text-text-secondary"><span>View Details</span><ChevronDown className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></div></button>{isExpanded && <><LogDetailView log={log} settings={agentSettings} /><div className="p-4 border-t border-border flex justify-end"><button onClick={() => handleExportSingleLog(log)} disabled={exportingSingle && logToExport?.id === log.id} className="flex items-center gap-2 text-sm font-semibold rounded-lg transition-colors px-3 py-1.5 bg-accent/20 text-accent hover:bg-accent/30">{exportingSingle && logToExport?.id === log.id ? <Spinner className="w-4 h-4"/> : <Download size={14}/>} Export Log</button></div></>}</Card>
                             );})}</div>
                         ) : (<p className="text-center text-text-secondary py-8">No logs found for this agent.</p>)}
                     </Card>

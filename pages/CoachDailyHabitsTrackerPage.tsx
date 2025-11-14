@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -8,7 +6,7 @@ import type { DailyTrackerData, HabitTrackerTemplate, HabitActivitySetting, Pros
 import { Calendar, Download, ChevronLeft, ChevronRight, Minus, Plus, Target, FileText, ChevronDown, CheckCircle, Save, ClipboardList, UserSearch } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc, setDoc, collection, query, where, orderBy, getDocs, addDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { processDailyTrackerDoc } from '../lib/firestoreUtils';
 
@@ -287,7 +285,7 @@ const CoachDailyHabitsTrackerPage: React.FC = () => {
           return;
         }
 
-        const settingsRef = collection(db, 'habitTrackerTemplates');
+        const settingsRef = collection(getFirestoreInstance(), 'habitTrackerTemplates');
         let settingsDoc = null;
         
         const roleQuery = query(settingsRef, where('isDefaultForRole', '==', 'productivity_coach'));
@@ -331,9 +329,9 @@ const CoachDailyHabitsTrackerPage: React.FC = () => {
             const { id, ...dataToSave } = trackerData;
 
             if (docId) {
-                await updateDoc(doc(db, 'dailyTrackers', docId), dataToSave);
+                await updateDoc(doc(getFirestoreInstance(), 'dailyTrackers', docId), dataToSave);
             } else {
-                const newDocRef = await addDoc(collection(db, 'dailyTrackers'), dataToSave);
+                const newDocRef = await addDoc(collection(getFirestoreInstance(), 'dailyTrackers'), dataToSave);
                 setDocId(newDocRef.id);
             }
             lastSavedDataRef.current = trackerData;
@@ -359,7 +357,7 @@ const CoachDailyHabitsTrackerPage: React.FC = () => {
             if (!user) { setLoading(false); return; }
             setLoading(true);
             const dateString = currentDate.toISOString().split('T')[0];
-            const q = query(collection(db, 'dailyTrackers'), where('date', '==', dateString), where('userId', '==', user.uid));
+            const q = query(collection(getFirestoreInstance(), 'dailyTrackers'), where('date', '==', dateString), where('userId', '==', user.uid));
             
             try {
                 const querySnapshot = await getDocs(q);
@@ -392,7 +390,7 @@ const CoachDailyHabitsTrackerPage: React.FC = () => {
     useEffect(() => {
         if (activeTab === 'logs' && user) {
             setLoadingLogs(true);
-            const logsQuery = query(collection(db, 'dailyTrackers'), where('userId', '==', user.uid), orderBy('date', 'desc'));
+            const logsQuery = query(collection(getFirestoreInstance(), 'dailyTrackers'), where('userId', '==', user.uid), orderBy('date', 'desc'));
             getDocs(logsQuery).then(snapshot => {
                 setAllLogs(snapshot.docs.map(doc => processDailyTrackerDoc(doc)));
                 setLoadingLogs(false);
@@ -427,7 +425,7 @@ const CoachDailyHabitsTrackerPage: React.FC = () => {
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const newHeight = canvas.height * pdfWidth / canvas.width;
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, newHeight);
-                pdf.save(`CoachTracker_${userData?.name || 'User'}_${trackerData.date}.pdf`);
+                pdf.save(`CoachTracker_${userData?.name || 'Coach'}_${trackerData.date}.pdf`);
                 setExporting(false);
             }).catch(err => {
                 console.error("Error exporting PDF:", err);
@@ -449,11 +447,11 @@ const CoachDailyHabitsTrackerPage: React.FC = () => {
                 const canvasHeight = canvas.height * pdfWidth / canvas.width;
                 let position = 0;
                 while (position < canvasHeight) {
-                    pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, canvasHeight);
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, canvasHeight);
                     position += pdfHeight;
                     if (position < canvasHeight) pdf.addPage();
                 }
-                pdf.save(`CoachTracker_AllLogs_${userData?.name || 'User'}.pdf`);
+                pdf.save(`CoachTracker_AllLogs_${userData?.name || 'Coach'}.pdf`);
             }).catch(err => {
                 console.error("Error exporting PDF:", err);
             }).finally(() => {

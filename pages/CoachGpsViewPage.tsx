@@ -1,8 +1,3 @@
-
-
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { TeamMember, DiscoveryGuideData } from '../types';
@@ -10,7 +5,7 @@ import type { EconomicModelData } from './BusinessGpsPage';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { Compass, BarChart, Users, Hash, ArrowDown, AlertTriangle } from 'lucide-react';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 
@@ -105,7 +100,7 @@ const CoachGpsViewPage: React.FC = () => {
                 setAgentGpsData(null);
                 setAgentEconomicData(null);
                 try {
-                    const docRef = doc(db, 'businessGps', selectedAgentId);
+                    const docRef = doc(getFirestoreInstance(), 'businessGps', selectedAgentId);
                     const docSnap = await getDoc(docRef);
 
                     if (docSnap.exists()) {

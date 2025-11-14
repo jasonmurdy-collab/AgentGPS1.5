@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, FC, useEffect, useCallback } from 'react';
 import { Card } from '../ui/Card';
 import { ArrowDown, Hash, Users, BarChart, Save, DollarSign, TrendingDown, PieChart, Lightbulb, AlertTriangle } from 'lucide-react';
@@ -39,7 +40,7 @@ const benchmarks = {
         auto: 0.006,
         equipment: 0.003,
         insurance: 0.002,
-    } as Record<NumericBudgetInputKeys, number>, // Use NumericBudgetInputKeys here as well
+    } as Record<NumericBudgetInputKeys, number>,
 };
 
 const FinancialInput: React.FC<{ label: string, value: number, onChange: (val: number) => void }> = React.memo(({ label, value, onChange }) => (
@@ -115,8 +116,7 @@ const BudgetModelCalculator: React.FC<BudgetModelCalculatorProps> = React.memo((
         setInputs(initialData);
     }, [initialData]);
 
-    const handleInputChange = useCallback((key: keyof BudgetModelInputs, value: number) => {
-        // Fix: Ensure value is a number to prevent NaN from being set in state.
+    const handleInputChange = useCallback((key: NumericBudgetInputKeys, value: number) => {
         const numericValue = isNaN(value) ? 0 : value;
         if (numericValue < 0) return;
         setInputs(prev => ({ ...prev, [key]: numericValue }));

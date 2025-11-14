@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect, useMemo, FC } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { Transaction, TeamMember } from '../types';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { PieChart, DollarSign, Users, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
 
@@ -100,7 +101,7 @@ const AgentSettingsTab: React.FC<{
 
 
 const CoachingFinancialsPage: React.FC = () => {
-    const { managedAgents, loadingAgents, userData, updateContributingAgents } = useAuth();
+    const { managedAgents, loadingAgents, userData, updateContributingAgents, user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -119,7 +120,7 @@ const CoachingFinancialsPage: React.FC = () => {
 
     useEffect(() => {
         const fetchTransactions = async () => {
-            if (loadingAgents || contributingAgents.length === 0) {
+            if (loadingAgents || !userData || !user) {
                 setLoading(false);
                 setTransactions([]);
                 return;
@@ -127,26 +128,25 @@ const CoachingFinancialsPage: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const agentIds = contributingAgents.map(a => a.id);
-                const allTransactions: Transaction[] = [];
+                // Securely query for all transactions this coach can see
+                const q = query(collection(getFirestoreInstance(), 'transactions'), where('coachId', '==', user.uid));
+                const querySnapshot = await getDocs(q);
+                
+                const allCoachTransactions = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        ...data,
+                        acceptanceDate: data.acceptanceDate?.toDate ? data.acceptanceDate.toDate().toISOString() : data.acceptanceDate,
+                    } as Transaction;
+                });
 
-                const idChunks: string[][] = [];
-                for (let i = 0; i < agentIds.length; i += 30) {
-                    idChunks.push(agentIds.slice(i, i + 30));
-                }
-                await Promise.all(idChunks.map(async (chunk) => {
-                    const q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
-                    const querySnapshot = await getDocs(q);
-                    querySnapshot.forEach(doc => {
-                        const data = doc.data();
-                        allTransactions.push({
-                            id: doc.id,
-                            ...data,
-                            acceptanceDate: data.acceptanceDate?.toDate ? data.acceptanceDate.toDate().toISOString() : data.acceptanceDate,
-                        } as Transaction);
-                    });
-                }));
-                setTransactions(allTransactions);
+                // Filter client-side based on the selected contributing agents
+                const contributingAgentIdsSet = new Set(contributingAgents.map(a => a.id));
+                const filteredTransactions = allCoachTransactions.filter(t => contributingAgentIdsSet.has(t.userId));
+                
+                setTransactions(filteredTransactions);
+
             } catch (err: any) {
                 console.error("Error fetching transactions:", err);
                 if (err.code === 'permission-denied') {
@@ -159,7 +159,7 @@ const CoachingFinancialsPage: React.FC = () => {
             }
         };
         fetchTransactions();
-    }, [contributingAgents, loadingAgents]);
+    }, [contributingAgents, loadingAgents, user, userData]);
 
     const agentGciData = useMemo(() => {
         const gciMap = new Map<string, { gci: number, transactionCount: number }>();

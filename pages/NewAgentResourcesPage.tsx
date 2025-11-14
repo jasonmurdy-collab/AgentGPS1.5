@@ -1,16 +1,11 @@
 
-
-
-
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Rocket, CheckCircle, ChevronDown, ChevronUp, ClipboardList, Link as LinkIcon, ListChecks } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
 import type { Playbook, Module, Lesson, NewAgentHomework, NewAgentResourceLink, ChecklistItem } from '../types';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
@@ -41,7 +36,7 @@ const NewAgentResourcesPage: React.FC = () => {
                     setCompletedChecklistItems(new Set(userData.onboardingChecklistProgress || []));
 
                     if (resources.assignedOnboardingPlaybookId) {
-                        const playbookDoc = await getDoc(doc(db, 'playbooks', resources.assignedOnboardingPlaybookId));
+                        const playbookDoc = await getDoc(doc(getFirestoreInstance(), 'playbooks', resources.assignedOnboardingPlaybookId)); // Fix: Use getFirestoreInstance()
                         if (playbookDoc.exists()) {
                             const pb = processPlaybookDoc(playbookDoc);
                             setOnboardingPlaybook(pb);
@@ -188,6 +183,7 @@ const NewAgentResourcesPage: React.FC = () => {
                             )}
                             {resourceLinks.length > 0 && (
                                 <Card>
+                                    {/* Fix: Corrected closing tag for h2 */}
                                     <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><LinkIcon/> Essential Resources</h2>
                                     <div className="space-y-2">
                                         {resourceLinks.map(link => (

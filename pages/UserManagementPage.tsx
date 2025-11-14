@@ -1,8 +1,5 @@
 
 
-
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -11,7 +8,8 @@ import type { TeamMember, Team, MarketCenter } from '../types';
 import { Users as UsersIcon, Search, SlidersHorizontal, Edit } from 'lucide-react';
 import { EditUserModal } from '../components/admin/EditUserModal';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+// Fix: 'db' is not an exported member of '../firebaseConfig'. Replaced with 'getFirestoreInstance'.
+import { getFirestoreInstance } from '../firebaseConfig';
 
 const formatRole = (role: TeamMember['role'], isSuperAdmin?: boolean) => {
     if (isSuperAdmin) return 'Super Admin';
@@ -152,14 +150,14 @@ const UserManagementPage: React.FC = () => {
 
         // Becoming an admin for a (new) MC
         if (isMcAdmin && newMarketCenterId && (!wasMcAdmin || oldMarketCenterId !== newMarketCenterId)) {
-            promises.push(updateDoc(doc(db, 'marketCenters', newMarketCenterId), {
+            promises.push(updateDoc(doc(getFirestoreInstance(), 'marketCenters', newMarketCenterId), {
                 adminIds: arrayUnion(userToEdit.id)
             }));
         }
 
         // No longer an admin for the old MC
         if (wasMcAdmin && oldMarketCenterId && (!isMcAdmin || oldMarketCenterId !== newMarketCenterId)) {
-            promises.push(updateDoc(doc(db, 'marketCenters', oldMarketCenterId), {
+            promises.push(updateDoc(doc(getFirestoreInstance(), 'marketCenters', oldMarketCenterId), {
                 adminIds: arrayRemove(userToEdit.id)
             }));
         }

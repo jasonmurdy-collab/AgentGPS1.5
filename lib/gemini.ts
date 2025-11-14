@@ -1,9 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { QuizContent, Playbook, NewAgentGoalTemplate } from "../types";
 
-// Initialize GoogleGenAI without an API key. 
-// The server-side proxy handles API key injection for security in a client-side application.
-const ai = new GoogleGenAI({});
+// Initialize GoogleGenAI with a placeholder API key.
+// The client-side SDK requires a key to be present, even if it's a dummy value.
+// The server-side proxy will intercept the actual API call and inject the real, secure API key.
+const ai = new GoogleGenAI({apiKey: "proxy"});
 
 const quizSchema = {
     type: Type.ARRAY,

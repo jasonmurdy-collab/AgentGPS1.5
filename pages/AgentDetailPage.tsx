@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth, P } from '../contexts/AuthContext';
@@ -12,7 +13,7 @@ import { ChangeRoleModal } from '../components/coach/ChangeRoleModal';
 import type { Goal, TeamMember, NewAgentHomework, DailyTrackerData, Playbook, PerformanceLog, DiscoveryGuideData, OrgBlueprint, Transaction, HabitTrackerTemplate, HabitActivitySetting } from '../types';
 import { EconomicModelData } from './BusinessGpsPage';
 import { LayoutDashboard, Target, BookOpen, ClipboardList, UserCheck, MessageSquare, CheckSquare, Star, ArrowLeft, Plus, GraduationCap, Trash2, Compass, Network, BarChart, Users, Hash, ArrowDown, AlertTriangle, DollarSign, BarChart2, ClipboardSignature, FileCheck, Search, Home, Briefcase, ShieldCheck, PhoneCall, MapPin, Settings2, Globe, ChevronDown } from 'lucide-react';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 
 // --- SUB-COMPONENTS ---
@@ -358,7 +359,7 @@ const AgentDetailPage: React.FC = () => {
             ] = await Promise.all([
                 getGoalsForUser(agentId), getAssignedResourcesForUser(agentId), getHabitLogsForUser(agentId),
                 getPlaybooksForUser(agentId), getPerformanceLogsForAgent(agentId), getOrgBlueprintForUser(agentId),
-                getTransactionsForUser(agentId), getDoc(doc(db, 'businessGps', agentId))
+                getTransactionsForUser(agentId), getDoc(doc(getFirestoreInstance(), 'businessGps', agentId))
             ]);
 
             setGoals(fetchedGoals.sort((a,b) => (a.isArchived ? 1 : -1)));
@@ -375,7 +376,7 @@ const AgentDetailPage: React.FC = () => {
                 setEconomicModelData(fetchedGps.economicModelData || null);
             }
             
-            const settingsRef = collection(db, 'habitTrackerTemplates');
+            const settingsRef = collection(getFirestoreInstance(), 'habitTrackerTemplates');
             let settingsDoc = null;
             const roleQuery = query(settingsRef, where('isDefaultForRole', '==', fetchedAgent.role));
             const roleSnap = await getDocs(roleQuery);
@@ -473,7 +474,7 @@ const AgentDetailPage: React.FC = () => {
                 {activeTab === 'goals' && <Card><h2 className="text-2xl font-bold mb-4">Goals</h2>{goals.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{goals.map(goal => <GoalProgressCard key={goal.id} goal={goal} onEdit={() => handleOpenGoalModalForEdit(goal)} onDelete={() => handleDeleteGoal(goal.id)} onArchive={() => handleToggleArchiveGoal(goal.id, !!goal.isArchived)}/>)}</div> : <p className="text-sm text-text-secondary">No goals set for this agent.</p>}</Card>}
                 {activeTab === 'gps' && <Card><h2 className="text-2xl font-bold mb-4">Strategic GPS</h2>{gpsData ? <GpsDisplay data={gpsData} /> : <p className="text-text-secondary text-center py-8">This agent has not completed their Strategic GPS yet.</p>}{economicModelData && economicCalculations ? <><h2 className="text-2xl font-bold my-4 pt-4 border-t">Economic Model</h2><ReadOnlyEconomicModel data={economicModelData} calculations={economicCalculations} /></> : <p className="text-text-secondary text-center py-8 mt-4 border-t">Economic Model data not available.</p>}</Card>}
                 {activeTab === 'architect' && <Card><h2 className="text-2xl font-bold mb-4">Growth Architect</h2><ArchitectDisplay blueprint={blueprint} agent={agent} kpis={{ gci: agent.gci || 0, transactions: agentTransactions.length }} /></Card>}
-                {activeTab === 'learning' && <Card><h2 className="text-2xl font-bold mb-4">Learning & Development</h2><PlaybookProgressSummary agent={{...agent, newAgentResources: { homework }}} playbooks={playbooks} homework={homework} onDeleteHomework={handleDeleteHomework} /></Card>}
+                {activeTab === 'learning' && <Card><h2 className="text-2xl font-bold mb-4">Learning & Development</h2><PlaybookProgressSummary agent={agent} playbooks={playbooks} homework={homework} onDeleteHomework={handleDeleteHomework} /></Card>}
                 {activeTab === 'activity' && <Card><h2 className="text-2xl font-bold mb-4">Habit Logs</h2>{habitLogs.length > 0 && habitSettings ? <div className="space-y-2">{habitLogs.map(log => { const isExpanded = expandedLogId === log.id; const date = new Date(log.date); date.setUTCHours(12); const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' }); return (<Card key={log.id} className="p-0 overflow-hidden"><button onClick={() => setExpandedLogId(isExpanded ? null : log.id)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5"><p className="font-bold">{formattedDate}</p><ChevronDown className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></button>{isExpanded && <LogDetailView log={log} settings={habitSettings} />}</Card>); })}</div> : <p className="text-sm text-text-secondary text-center py-8">No habit logs found for this agent.</p>}</Card>}
                 {activeTab === 'performance' && <Card><h2 className="text-2xl font-bold mb-4">All Performance Logs</h2>{performanceLogs.length > 0 ? <div className="space-y-3">{performanceLogs.map(log => <PerformanceLogSummaryCard key={log.id} log={log} />)}</div> : <p className="text-sm text-text-secondary">No performance logs found.</p>}</Card>}
             </div>

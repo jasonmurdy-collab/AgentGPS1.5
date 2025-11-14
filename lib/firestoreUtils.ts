@@ -142,7 +142,6 @@ export const processUserDoc = (doc: DocumentSnapshot): TeamMember => {
         assignedLearningPathId: data.assignedLearningPathId || null,
         newAgentResources: data.newAgentResources || {},
         onboardingChecklistProgress: data.onboardingChecklistProgress || [],
-        zapierApiKey: data.zapierApiKey || '',
     };
 };
 

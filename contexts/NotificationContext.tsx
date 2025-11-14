@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, getDocs, orderBy, Timestamp, DocumentSnapshot } from 'firebase/firestore';
 import type { Notification } from '../types';
 import { processNotificationDoc } from '../lib/firestoreUtils';
@@ -32,7 +32,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
 
         setLoading(true);
-        const notificationsRef = collection(db, 'notifications');
+        const notificationsRef = collection(getFirestoreInstance(), 'notifications');
         const q = query(
             notificationsRef, 
             where("userId", "==", user.uid),
@@ -54,7 +54,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
     const markAsRead = useCallback(async (notificationId: string) => {
-        const notificationDocRef = doc(db, 'notifications', notificationId);
+        const notificationDocRef = doc(getFirestoreInstance(), 'notifications', notificationId);
         await updateDoc(notificationDocRef, { read: true });
     }, []);
 
@@ -62,9 +62,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         const unread = notifications.filter(n => !n.read);
         if (unread.length === 0) return;
 
-        const batch = writeBatch(db);
+        const batch = writeBatch(getFirestoreInstance());
         unread.forEach(notification => {
-            const docRef = doc(db, 'notifications', notification.id);
+            const docRef = doc(getFirestoreInstance(), 'notifications', notification.id);
             batch.update(docRef, { read: true });
         });
         await batch.commit();
@@ -82,9 +82,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 };
 
 export const useNotifications = (): NotificationContextType => {
-    const context = useContext(NotificationContext);
-    if (!context) {
-        throw new Error('useNotifications must be used within a NotificationProvider');
-    }
-    return context;
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotifications must be used within a NotificationProvider');
+  }
+  return context;
 };

@@ -1,12 +1,16 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import type { Playbook, LearningPath, Lesson } from '../types';
 import { BookOpen, Search, Layers, BookOpen as LeadGenIcon, TrendingUp, ChevronsRight } from 'lucide-react';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+// Fix: Import the processing utility for playbook documents.
+import { processPlaybookDoc } from '../lib/firestoreUtils';
+
 
 const StaticPlaybookCard: React.FC<{ title: string; description: string; to: string; icon: React.ElementType; }> = ({ title, description, to, icon: Icon }) => (
     <Link to={to} className="block h-full">
@@ -79,7 +83,7 @@ const ResourceLibraryPage: React.FC = () => {
     const fetchPlaybooks = useCallback(async () => {
         if (!userData) { setLoading(false); return; }
         setLoading(true);
-        const playbooksRef = collection(db, 'playbooks');
+        const playbooksRef = collection(getFirestoreInstance(), 'playbooks');
         const queriesToRun = [
             query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null)),
         ];
@@ -93,144 +97,107 @@ const ResourceLibraryPage: React.FC = () => {
             const snapshots = await Promise.all(queriesToRun.map(q => getDocs(q)));
             const allPlaybooks = new Map<string, Playbook>();
             snapshots.forEach(snapshot => {
-                snapshot.docs.forEach(doc => {
+                snapshot.forEach(doc => {
                     if (!allPlaybooks.has(doc.id)) {
-                        const data = doc.data();
-                        allPlaybooks.set(doc.id, {
-                            id: doc.id, ...data,
-                            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-                        } as Playbook);
+                        allPlaybooks.set(doc.id, processPlaybookDoc(doc));
                     }
                 });
             });
             setPlaybooks(Array.from(allPlaybooks.values()));
-        } catch (error) { console.error("Error fetching playbooks:", error); } 
-        finally { setLoading(false); }
+        } catch (error) {
+            console.error("Error fetching playbooks:", error);
+        } finally {
+            setLoading(false);
+        }
     }, [userData]);
 
     useEffect(() => {
         fetchPlaybooks();
     }, [fetchPlaybooks]);
+    
+    const filteredPlaybooks = useMemo(() => {
+        return playbooks.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [playbooks, searchTerm]);
+    
+    const progressData = useMemo(() => {
+        return playbooks.map(playbook => {
+            const totalLessons = playbook.modules.reduce((acc, mod) => acc + (mod.lessons?.length || 0), 0);
+            const completedLessons = userData?.playbookProgress?.[playbook.id]?.length || 0;
+            const progress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+            return { playbook, progress, totalLessons, completedLessons };
+        });
+    }, [playbooks, userData?.playbookProgress]);
 
-    const { upNext, filteredPlaybooks } = useMemo(() => {
-        if (!playbooks.length || !userData) return { upNext: null, filteredPlaybooks: [] };
-
-        let nextLesson: Lesson | null = null;
-        let nextPlaybook: Playbook | null = null;
-        
-        // This logic can be expanded when Learning Paths are formally implemented and assigned
-        for (const pb of playbooks) {
-            const allLessons = pb.modules.flatMap(m => m.lessons);
-            const completed = userData.playbookProgress?.[pb.id] || [];
-            const firstUncompleted = allLessons.find(l => !completed.includes(l.id));
-
-            if (firstUncompleted) {
-                nextLesson = firstUncompleted;
-                nextPlaybook = pb;
-                break;
+    const nextLessonInfo = useMemo(() => {
+        for (const { playbook, completedLessons, totalLessons } of progressData) {
+            if (completedLessons > 0 && completedLessons < totalLessons) {
+                const firstUncompleted = playbook.modules.flatMap(m => m.lessons).find(l => !userData?.playbookProgress?.[playbook.id]?.includes(l.id));
+                if (firstUncompleted) {
+                    return { playbook, nextLesson: firstUncompleted };
+                }
             }
         }
-        
-        let filtered = playbooks;
-        if (searchTerm) {
-            const lowercasedTerm = searchTerm.toLowerCase();
-            filtered = playbooks.filter(playbook =>
-                playbook.title.toLowerCase().includes(lowercasedTerm) ||
-                playbook.description.toLowerCase().includes(lowercasedTerm)
-            );
-        }
+        return null;
+    }, [progressData, userData?.playbookProgress]);
 
-        return {
-            upNext: nextLesson && nextPlaybook ? { nextLesson, playbook: nextPlaybook } : null,
-            filteredPlaybooks: filtered
-        };
-
-    }, [playbooks, userData, searchTerm]);
-
-    const getPlaybookProgress = (playbook: Playbook) => {
-        const totalLessons = playbook.modules.reduce((sum, mod) => sum + (mod.lessons?.length || 0), 0);
-        const completedLessons = userData?.playbookProgress?.[playbook.id]?.length || 0;
-        const progress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
-        return { progress, totalLessons, completedLessons };
-    };
+    if (loading) {
+        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+    }
 
     return (
         <div className="h-full flex flex-col">
             <header className="p-4 sm:p-6 lg:p-8">
                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
-                   <TrendingUp className="text-accent-secondary" size={48} />
-                   My Growth
+                    <BookOpen size={48} className="text-accent-secondary" />
+                    My Growth
                 </h1>
-                <p className="text-lg text-text-secondary mt-1">Your personalized hub for learning and development.</p>
+                <p className="text-lg text-text-secondary mt-1">Your central hub for playbooks, training, and lead generation strategies.</p>
             </header>
 
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-8">
-                {loading ? <Spinner /> : upNext && <UpNextCard {...upNext} />}
+                {nextLessonInfo && <UpNextCard playbook={nextLessonInfo.playbook} nextLesson={nextLessonInfo.nextLesson} />}
 
-                <div>
-                    <h2 className="text-2xl font-bold mb-4">Core Playbooks</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <StaticPlaybookCard
-                            title="MREA Playbook"
-                            description="A deep dive into the foundational models of The Millionaire Real Estate Agent."
-                            to="/resource-library/mrea-playbook"
-                            icon={Layers}
-                        />
-                        <StaticPlaybookCard
-                            title="Lead Generation Playbook"
-                            description="Actionable ideas to fuel your pipeline. Click any idea to create a goal."
-                            to="/resource-library/lead-gen"
-                            icon={LeadGenIcon}
-                        />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <StaticPlaybookCard 
+                        title="Lead Generation Playbook"
+                        description="Actionable, proven strategies to fuel your pipeline, from direct prospecting to digital marketing."
+                        to="/resource-library/lead-gen"
+                        icon={LeadGenIcon}
+                    />
+                     <StaticPlaybookCard 
+                        title="MREA Playbook"
+                        description="A deep dive into the foundational models of The Millionaire Real Estate Agent for building a scalable business."
+                        to="/resource-library/mrea-playbook"
+                        icon={Layers}
+                    />
                 </div>
 
                 <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold">Custom Playbooks</h2>
-                        <div className="relative">
-                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"/>
-                            <input
-                                type="text"
-                                placeholder="Search playbooks..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full max-w-sm bg-input border border-border rounded-md pl-10 pr-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                            />
-                        </div>
+                    <h2 className="text-2xl font-bold mb-4">Your Playbooks</h2>
+                    <div className="relative mb-6">
+                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" />
+                        <input 
+                            type="text" 
+                            placeholder="Search playbooks..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full max-w-sm bg-input border border-border rounded-lg pl-12 pr-4 py-3"
+                        />
                     </div>
-
-                    {loading ? (
-                        <div className="flex justify-center items-center py-10"><Spinner /></div>
-                    ) : filteredPlaybooks.length > 0 ? (
+                    {filteredPlaybooks.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredPlaybooks.map(playbook => {
-                                const { progress, totalLessons, completedLessons } = getPlaybookProgress(playbook);
-                                return (
-                                    <PlaybookProgressCard 
-                                        key={playbook.id} 
-                                        playbook={playbook} 
-                                        progress={progress}
-                                        totalLessons={totalLessons}
-                                        completedLessons={completedLessons}
-                                    />
-                                );
+                                const data = progressData.find(p => p.playbook.id === playbook.id);
+                                return data ? <PlaybookProgressCard key={playbook.id} {...data} /> : null;
                             })}
                         </div>
                     ) : (
-                        <Card className="text-center py-12">
-                            <h2 className="text-xl font-bold">No Custom Playbooks Found</h2>
-                            <p className="text-text-secondary mt-2">
-                                {searchTerm 
-                                ? "No playbooks match your search."
-                                : "Your coach or team leader has not added any custom playbooks yet."}
-                            </p>
-                        </Card>
+                         <Card><p className="text-center text-text-secondary py-8">No playbooks found.</p></Card>
                     )}
                 </div>
             </div>
         </div>
     );
 };
-
+// Fix: Add default export to resolve React.lazy loading issue.
 export default ResourceLibraryPage;

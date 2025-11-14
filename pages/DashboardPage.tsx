@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
@@ -9,7 +10,7 @@ import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen } from 'lucide-reac
 import { Card } from '../components/ui/Card';
 import { useAuth } from '../contexts/AuthContext';
 import { DashboardVisualizations } from '../components/dashboard/DashboardVisualizations';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { Transaction, Goal, Playbook } from '../types';
 import { GoalModal } from '../components/goals/AddGoalModal';
@@ -58,7 +59,7 @@ const MyLearning: React.FC<{
                                 <span className="text-xs text-text-secondary">{completedLessons}/{totalLessons}</span>
                             </div>
                             <div className="w-full bg-background rounded-full h-2">
-                                <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }}></div>
+                                <div className="bg-primary h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
                             </div>
                         </Link>
                     )
@@ -131,7 +132,7 @@ const DashboardPage: React.FC = () => {
             return;
         }
         setLoadingPlaybooks(true);
-        const playbooksRef = collection(db, 'playbooks');
+        const playbooksRef = collection(getFirestoreInstance(), 'playbooks'); // Fix: Use getFirestoreInstance()
         const queriesToRun = [
             query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null))
         ];

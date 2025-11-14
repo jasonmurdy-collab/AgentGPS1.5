@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { DiscoveryGuideData } from '../../types';
@@ -9,7 +5,7 @@ import { Card } from '../ui/Card';
 import { Spinner } from '../ui/Spinner';
 import { Link } from 'react-router-dom';
 import { Compass, Target, Star } from 'lucide-react';
-import { db } from '../../firebaseConfig';
+import { getFirestoreInstance } from '../../firebaseConfig';
 import { doc, onSnapshot } from 'firebase/firestore';
 
 export const GpsSummaryCard: React.FC = () => {
@@ -23,7 +19,7 @@ export const GpsSummaryCard: React.FC = () => {
             return;
         }
         setLoading(true);
-        const docRef = doc(db, 'businessGps', user.uid);
+        const docRef = doc(getFirestoreInstance(), 'businessGps', user.uid);
         
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {

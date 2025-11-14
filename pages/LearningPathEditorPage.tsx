@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
 import { doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
@@ -28,7 +29,7 @@ const LearningPathEditorPage: React.FC = () => {
                 setLoading(false);
                 return;
             }
-            const docRef = doc(db, 'learningPaths', pathId);
+            const docRef = doc(getFirestoreInstance(), 'learningPaths', pathId); // Fix: Use getFirestoreInstance()
             const docSnap = await getDoc(docRef);
             const data = docSnap.data();
             if (docSnap.exists() && data && data.creatorId === user.uid) {
@@ -39,7 +40,7 @@ const LearningPathEditorPage: React.FC = () => {
             setLoading(false);
         };
 
-        const q = query(collection(db, 'playbooks'), where('creatorId', '==', user.uid));
+        const q = query(collection(getFirestoreInstance(), 'playbooks'), where('creatorId', '==', user.uid)); // Fix: Use getFirestoreInstance()
         const unsub = onSnapshot(q, (snapshot) => {
             setAvailablePlaybooks(snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Playbook)));
         });
@@ -52,7 +53,7 @@ const LearningPathEditorPage: React.FC = () => {
         if (!user || !userData || !path.title) return;
         setSaving(true);
         try {
-            const docRef = path.id ? doc(db, 'learningPaths', path.id) : doc(collection(db, 'learningPaths'));
+            const docRef = path.id ? doc(getFirestoreInstance(), 'learningPaths', path.id) : doc(collection(getFirestoreInstance(), 'learningPaths')); // Fix: Use getFirestoreInstance()
             const dataToSave = {
                 creatorId: user.uid,
                 teamId: userData.teamId || null,

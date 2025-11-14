@@ -1,6 +1,4 @@
-
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '../ui/Card';
 import { X } from 'lucide-react';
@@ -19,10 +17,18 @@ interface EditUserModalProps {
 export const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, onSave, agent, marketCenters }) => {
     const { userData } = useAuth();
     const isCurrentUserSuperAdmin = userData?.isSuperAdmin;
-    const [selectedRole, setSelectedRole] = useState<TeamMember['role']>(agent.role);
+    const [selectedRole, setSelectedRole] = useState<TeamMember['role']>(agent.role || 'agent');
     const [selectedMarketCenterId, setSelectedMarketCenterId] = useState<string>(agent.marketCenterId || '');
     const [loading, setLoading] = useState(false);
     const [localError, setLocalError] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedRole(agent.role || 'agent');
+            setSelectedMarketCenterId(agent.marketCenterId || '');
+            setLocalError('');
+        }
+    }, [isOpen, agent]);
 
     const availableRoles: { value: TeamMember['role']; label: string }[] = [
         { value: 'agent', label: 'Agent' },
@@ -66,6 +72,9 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, o
 
     if (!isOpen) return null;
 
+    const inputClasses = "w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary";
+    const labelClasses = "block text-sm font-medium text-text-secondary mb-1";
+
     return createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
             <Card className="w-full max-w-md">
@@ -82,7 +91,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, o
                 <form onSubmit={handleSubmit}>
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="role-select" className="block text-sm font-medium text-text-secondary mb-1">Role</label>
+                            <label htmlFor="role-select" className={labelClasses}>Role</label>
                             <select
                                 id="role-select"
                                 value={selectedRole}
@@ -95,5 +104,45 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, o
                                 ))}
                             </select>
                         </div>
-                        <div>
-                            <label htmlFor="mc-select" className="block text-sm font-medium text-text-secondary mb
+                        {selectedRole === 'market_center_admin' && (
+                            <div>
+                                <label htmlFor="mc-select" className={labelClasses}>Market Center</label>
+                                <select
+                                    id="mc-select"
+                                    value={selectedMarketCenterId}
+                                    onChange={e => setSelectedMarketCenterId(e.target.value)}
+                                    className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                                    required={selectedRole === 'market_center_admin'}
+                                >
+                                    <option value="">-- Select Market Center --</option>
+                                    {marketCenters.map(mc => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {selectedRole !== 'market_center_admin' && (
+                            <div>
+                                <label htmlFor="mc-select" className={labelClasses}>Market Center (Optional)</label>
+                                <select
+                                    id="mc-select"
+                                    value={selectedMarketCenterId}
+                                    onChange={e => setSelectedMarketCenterId(e.target.value)}
+                                    className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="">-- No Market Center --</option>
+                                    {marketCenters.map(mc => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex justify-end gap-4 pt-6">
+                        <button type="button" onClick={onClose} className="py-2 px-4 rounded-lg text-text-secondary hover:bg-primary/10">Cancel</button>
+                        <button type="submit" disabled={loading} className="min-w-[120px] flex justify-center items-center py-2 px-4 rounded-lg bg-primary text-on-accent font-semibold hover:bg-opacity-90 disabled:bg-opacity-50">
+                            {loading ? <Spinner /> : 'Save Changes'}
+                        </button>
+                    </div>
+                </form>
+            </Card>
+        </div>,
+        document.body
+    );
+};

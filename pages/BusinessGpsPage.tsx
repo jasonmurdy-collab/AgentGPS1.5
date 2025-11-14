@@ -9,7 +9,7 @@ import html2canvas from 'html2canvas';
 import { Download, PlusCircle, Save, Compass, DollarSign, ClipboardList, Target } from 'lucide-react';
 import { GoalModal } from '../components/goals/AddGoalModal';
 import { useGoals } from '../contexts/GoalContext';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const EconomicModelCalculator = lazy(() => import('../components/gps/EconomicModelCalculator'));
@@ -229,7 +229,7 @@ const BusinessGpsPage: React.FC = () => {
     useEffect(() => {
         if (!user) return;
         setLoading(true);
-        const docRef = doc(db, 'businessGps', user.uid);
+        const docRef = doc(getFirestoreInstance(), 'businessGps', user.uid);
         getDoc(docRef).then(docSnap => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -243,7 +243,7 @@ const BusinessGpsPage: React.FC = () => {
     const handleSave = useCallback(async () => {
         if (!user) return;
         setSaving(true);
-        const docRef = doc(db, 'businessGps', user.uid);
+        const docRef = doc(getFirestoreInstance(), 'businessGps', user.uid);
         await setDoc(docRef, {
             userId: user.uid,
             gpsData,

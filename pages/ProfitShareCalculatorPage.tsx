@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useState, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { PieChart, DollarSign, Users, TrendingUp, Info, UserSearch, Trash2 } from 'lucide-react';
@@ -240,12 +236,12 @@ const ProfitShareCalculatorPage: React.FC = () => {
                                             {LEVEL_DEFINITIONS.map(l => <option key={l.level} value={l.level}>{l.level}</option>)}
                                         </select>
                                     </div>
-                                    <div className="text-left">
+                                    <div className="text-center md:text-left">
                                         <p className="text-xs font-semibold text-text-secondary">Monthly</p>
                                         <p className="font-bold text-primary">{formatCurrency(result?.monthly || 0)}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-left">
+                                    <div className="col-span-2 md:col-span-1 flex items-center justify-between">
+                                        <div className="text-center md:text-left">
                                             <p className="text-xs font-semibold text-text-secondary">Annual</p>
                                             <p className="font-bold text-accent-secondary">{formatCurrency(result?.annual || 0)}</p>
                                         </div>

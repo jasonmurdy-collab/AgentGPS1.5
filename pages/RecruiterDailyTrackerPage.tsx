@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -6,7 +7,7 @@ import type { DailyTrackerData, HabitTrackerTemplate, HabitActivitySetting, Pros
 import { Calendar, Download, ChevronLeft, ChevronRight, Minus, Plus, Target, FileText, ChevronDown, CheckCircle, Save, ClipboardList, UserSearch } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
 import { doc, getDoc, setDoc, collection, query, where, orderBy, getDocs, addDoc, updateDoc } from 'firebase/firestore';
 
 // --- DEFAULT DATA & HELPERS ---
@@ -31,7 +32,7 @@ const getInitialTrackerData = (userId: string, date: Date, teamId?: string, mark
     ];
     times.forEach(time => { schedule[time] = ''; });
     return {
-        userId, date: dateString, teamId: teamId || '', marketCenterId: marketCenterId || '', dials: 0,
+        userId, date: dateString, teamId: teamId || null, marketCenterId: marketCenterId || null, dials: 0,
         doorsKnocked: 0, knocksAnswered: 0,
         pointsActivities: {}, prospectingSessions: [{ startTime: '09:00', endTime: '12:00' }, { startTime: '', endTime: '' }],
         prospectingTotals: { contacts: 0, aptsSet: 0, listingAptsSet: 0, buyerAptsSet: 0, lenderAptsSet: 0 },
@@ -157,7 +158,7 @@ const DailyMetricsSection: React.FC<{ data: DailyTrackerData; settings: HabitAct
             ))}
         </div>
     </Card>
-));
+);
 
 const ScheduleSection: React.FC<{ schedule: { [time: string]: string }; onUpdate: (path: string, value: any) => void; }> = ({ schedule, onUpdate }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -216,7 +217,7 @@ const RecruiterDailyTrackerPage: React.FC = () => {
     useEffect(() => {
       const fetchSettings = async () => {
         if (!user) return;
-        const settingsRef = collection(db, 'habitTrackerTemplates');
+        const settingsRef = collection(getFirestoreInstance(), 'habitTrackerTemplates'); // Fix: Use getFirestoreInstance()
         const roleQuery = query(settingsRef, where('isDefaultForRole', '==', 'recruiter'));
         const roleSnap = await getDocs(roleQuery);
         
@@ -252,7 +253,7 @@ const RecruiterDailyTrackerPage: React.FC = () => {
         if (!user || !trackerData) return;
         setSaveStatus('saving');
         try {
-            const collectionRef = collection(db, 'dailyTrackers');
+            const collectionRef = collection(getFirestoreInstance(), 'dailyTrackers'); // Fix: Use getFirestoreInstance()
             const { id, ...dataToSave } = trackerData;
             if (docId) {
                 await updateDoc(doc(collectionRef, docId), dataToSave);
@@ -280,7 +281,7 @@ const RecruiterDailyTrackerPage: React.FC = () => {
             if (!user) { setLoading(false); return; }
             setLoading(true);
             const dateString = currentDate.toISOString().split('T')[0];
-            const q = query(collection(db, 'dailyTrackers'), where('userId', '==', user.uid), where('date', '==', dateString));
+            const q = query(collection(getFirestoreInstance(), 'dailyTrackers'), where('userId', '==', user.uid), where('date', '==', dateString)); // Fix: Use getFirestoreInstance()
             try {
                 const querySnapshot = await getDocs(q);
                 if (!querySnapshot.empty) {

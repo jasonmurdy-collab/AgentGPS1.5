@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
 import { doc, onSnapshot, setDoc, getDocs } from 'firebase/firestore';
 import { collection, query, where } from 'firebase/firestore';
 import type { OrgBlueprint, OrgChartNode, Transaction } from '../types';
@@ -142,7 +143,7 @@ const OrganizationalBlueprintPage: React.FC = () => {
     useEffect(() => {
         if (!user || !userData) return;
         setLoading(true);
-        const blueprintDocRef = doc(db, 'orgBlueprints', user.uid);
+        const blueprintDocRef = doc(getFirestoreInstance(), 'orgBlueprints', user.uid); // Fix: Use getFirestoreInstance()
         const unsubscribe = onSnapshot(blueprintDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 setBlueprint(docSnap.data() as OrgBlueprint);
@@ -161,7 +162,7 @@ const OrganizationalBlueprintPage: React.FC = () => {
     const fetchKpis = useCallback(async () => {
         if (!user) return;
         try {
-            const q = query(collection(db, 'transactions'), where('userId', '==', user.uid));
+            const q = query(collection(getFirestoreInstance(), 'transactions'), where('userId', '==', user.uid)); // Fix: Use getFirestoreInstance()
             const snapshot = await getDocs(q);
             let totalGci = 0;
             let recentCount = 0;
@@ -191,7 +192,7 @@ const OrganizationalBlueprintPage: React.FC = () => {
 
     const saveBlueprint = useCallback(async (newBlueprint: OrgBlueprint) => {
         if (!user || !userData) return;
-        const blueprintDocRef = doc(db, 'orgBlueprints', user.uid);
+        const blueprintDocRef = doc(getFirestoreInstance(), 'orgBlueprints', user.uid); // Fix: Use getFirestoreInstance()
         const dataToSave = {
             ...newBlueprint,
             userId: user.uid,

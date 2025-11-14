@@ -1,10 +1,12 @@
+
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Users, UserPlus, LogOut, ClipboardCopy, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
 import type { TeamMember, Team } from '../types';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { processTeamDoc, processUserDoc } from '../lib/firestoreUtils';
 
@@ -54,6 +56,7 @@ const TeamsPage: React.FC = () => {
     if (userData?.teamId) {
         setLoadingTeam(true);
         try {
+            const db = getFirestoreInstance();
             // Fetch team doc
             const teamDocRef = doc(db, 'teams', userData.teamId);
             const teamDocSnap = await getDoc(teamDocRef);

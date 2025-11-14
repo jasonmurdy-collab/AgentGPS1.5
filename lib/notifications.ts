@@ -1,5 +1,7 @@
+
+
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 
 interface CreateNotificationPayload {
     userId: string; // recipient
@@ -11,7 +13,7 @@ interface CreateNotificationPayload {
 
 export const createNotification = async (payload: CreateNotificationPayload) => {
     try {
-        await addDoc(collection(db, 'notifications'), {
+        await addDoc(collection(getFirestoreInstance(), 'notifications'), {
             ...payload,
             read: false,
             createdAt: serverTimestamp(),

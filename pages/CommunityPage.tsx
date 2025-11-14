@@ -5,7 +5,7 @@ import { SkeletonCard } from '../components/ui/SkeletonCard';
 import { CommunityGoalProgressCard } from '../components/goals/CommunityGoalProgressCard';
 import { Goal, GoalType, TeamMember } from '../types';
 import { collection, query, where, onSnapshot, orderBy, limit, getDoc, doc, DocumentSnapshot, getDocs } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { Globe } from 'lucide-react';
 import { processGoalDoc } from '../lib/firestoreUtils';
 
@@ -28,7 +28,7 @@ const CommunityGoals: React.FC = () => {
 
         const fetchCommunityGoals = async () => {
             setLoading(true);
-            const goalsCollectionRef = collection(db, 'goals');
+            const goalsCollectionRef = collection(getFirestoreInstance(), 'goals');
             
             try {
                 // Fetch public goals
@@ -43,7 +43,7 @@ const CommunityGoals: React.FC = () => {
                     const teamQuery = query(
                         goalsCollectionRef,
                         where("teamId", "==", userData.teamId),
-                        where("visibility", "==", "team_view_only")
+                        where("visibility", "in", ["public", "team_view_only"])
                     );
                     const teamSnapshot = await getDocs(teamQuery);
                     fetchedTeamGoals = teamSnapshot.docs.map(processGoalDoc);
@@ -175,11 +175,4 @@ const CommunityPage: React.FC = () => {
                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-3"><Globe size={40} />Community</h1>
                 <p className="text-lg text-text-secondary mt-1">Engage with team members and see public goals from the wider agent community.</p>
             </header>
-            <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
-                <CommunityGoals />
-            </main>
-        </div>
-    );
-};
-
-export default CommunityPage;
+            <main className="flex-1 overflow-y-auto px-4

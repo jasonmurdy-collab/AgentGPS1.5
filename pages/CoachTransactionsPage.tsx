@@ -1,10 +1,13 @@
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import type { CommissionProfile, Transaction, ProcessedTransaction, TeamMember } from '../types';
 import { BarChartHorizontal, ChevronDown, ChevronUp, Search, AlertTriangle } from 'lucide-react';
-import { db } from '../firebaseConfig';
+// Fix: 'db' is not an exported member of '../firebaseConfig'. Replaced with 'getFirestoreInstance'.
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { processTransactionsForCoach } from '../lib/transactionUtils';
 import { processTransactionDoc, processCommissionProfileDoc } from '../lib/firestoreUtils';
@@ -58,41 +61,47 @@ const CoachTransactionsPage: React.FC = () => {
             setError(null);
 
             try {
-                const agentIds = agents.map(a => a.id);
-                const transactionsRef = collection(db, 'transactions');
+                const transactionsRef = collection(getFirestoreInstance(), 'transactions');
                 let tQuery;
 
                 if (P.isSuperAdmin(userData)) {
-                    tQuery = query(transactionsRef); // Super admin can see all
-                } else if (userData.role === 'market_center_admin' && userData.marketCenterId) {
+                    tQuery = query(transactionsRef);
+                } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
                     tQuery = query(transactionsRef, where('marketCenterId', '==', userData.marketCenterId));
-                } else if (userData.role === 'productivity_coach') {
+                } else if (P.isCoach(userData) && !P.isMcAdmin(userData)) { // Productivity coach specifically
                     tQuery = query(transactionsRef, where('coachId', '==', user.uid));
-                } else if (userData.role === 'team_leader' && userData.teamId) {
+                } else if (P.isTeamLeader(userData) && userData.teamId) { // Team leader who isn't a coach
                     tQuery = query(transactionsRef, where('teamId', '==', userData.teamId));
+                } else {
+                    setProcessedTransactions([]);
+                    setLoading(false);
+                    return;
                 }
                 
-                if (!tQuery) {
+                const tSnap = await getDocs(tQuery);
+                const allTransactions = tSnap.docs.map(processTransactionDoc);
+                
+                if (allTransactions.length === 0) {
                     setProcessedTransactions([]);
                     setLoading(false);
                     return;
                 }
 
-                const tSnap = await getDocs(tQuery);
-                const allTransactions = tSnap.docs.map(processTransactionDoc);
+                const agentIdsFromTransactions = [...new Set(allTransactions.map(t => t.userId))];
 
                 const allProfiles: CommissionProfile[] = [];
-                if (agentIds.length > 0) {
-                    for (let i = 0; i < agentIds.length; i += 30) {
-                        const chunk = agentIds.slice(i, i + 30);
+                if (agentIdsFromTransactions.length > 0) {
+                    for (let i = 0; i < agentIdsFromTransactions.length; i += 30) {
+                        const chunk = agentIdsFromTransactions.slice(i, i + 30);
                         if (chunk.length > 0) {
-                            const profilesQuery = query(collection(db, 'commissionProfiles'), where(documentId(), 'in', chunk));
+                            const profilesQuery = query(collection(getFirestoreInstance(), 'commissionProfiles'), where(documentId(), 'in', chunk));
                             const profilesSnap = await getDocs(profilesQuery);
                             profilesSnap.forEach(doc => allProfiles.push(processCommissionProfileDoc(doc)));
                         }
                     }
                 }
-
+                
+                // Use all managed agents to ensure names are available even if they have no transactions yet
                 const processed = processTransactionsForCoach(allTransactions, allProfiles, agents);
                 setProcessedTransactions(processed);
 
@@ -238,6 +247,7 @@ const CoachTransactionsPage: React.FC = () => {
                                     />
                                 </div>
                             </div>
+                            {/* Mobile View: Cards */}
                             <div className="block md:hidden space-y-4">
                                 {filteredAndSortedTransactions.length > 0 ? (
                                     filteredAndSortedTransactions.map(t => (
@@ -247,6 +257,8 @@ const CoachTransactionsPage: React.FC = () => {
                                     <p className="text-center text-text-secondary py-8">No transactions found.</p>
                                 )}
                             </div>
+
+                            {/* Desktop View: Table */}
                             <div className="overflow-x-auto hidden md:block">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-background/50">

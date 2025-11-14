@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { OrgBlueprint, TeamMember, Transaction } from '../types';
 import { Network, DollarSign, BarChart2, ClipboardSignature, FileCheck, Search, Home, Briefcase } from 'lucide-react';
 
@@ -17,7 +16,7 @@ const ROLES_AVAILABLE = [
 ];
 
 const CoachBlueprintViewPage: React.FC = () => {
-    const { managedAgents, loadingAgents } = useAuth();
+    const { managedAgents, loadingAgents, getTransactionsForUser } = useAuth();
     const [selectedAgentId, setSelectedAgentId] = useState('');
     const [blueprint, setBlueprint] = useState<OrgBlueprint | null>(null);
     const [kpis, setKpis] = useState({ gci: 0, transactions: 0 });
@@ -35,7 +34,7 @@ const CoachBlueprintViewPage: React.FC = () => {
         setError(null);
 
         // Fetch blueprint
-        const blueprintDocRef = doc(db, 'orgBlueprints', selectedAgentId);
+        const blueprintDocRef = doc(getFirestoreInstance(), 'orgBlueprints', selectedAgentId);
         const unsubBlueprint = onSnapshot(blueprintDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 setBlueprint(docSnap.data() as OrgBlueprint);
@@ -51,20 +50,18 @@ const CoachBlueprintViewPage: React.FC = () => {
             }
         });
 
-        // Fetch KPIs
+        // Fetch KPIs securely using the AuthContext function
         const fetchKpis = async () => {
             try {
-                const q = query(collection(db, 'transactions'), where('userId', '==', selectedAgentId));
-                const snapshot = await getDocs(q);
+                const agentTransactions = await getTransactionsForUser(selectedAgentId);
                 let totalGci = 0;
-                snapshot.forEach(doc => {
-                    const t = doc.data() as Transaction;
+                agentTransactions.forEach(t => {
                     totalGci += t.salePrice * (t.commissionRate / 100);
                 });
-                setKpis({ gci: totalGci, transactions: snapshot.size });
+                setKpis({ gci: totalGci, transactions: agentTransactions.length });
             } catch (err: any) {
                  console.error("Error fetching KPIs for agent:", err);
-                 if (err.code === 'permission-denied') {
+                 if (err.code === 'permission-denied' || (err.message && err.message.includes('permission'))) {
                     setError("Permission Denied: Your role cannot view this agent's KPIs. Please check Firestore security rules.");
                  } else {
                     setError("Could not load agent's KPIs.");
@@ -72,12 +69,12 @@ const CoachBlueprintViewPage: React.FC = () => {
             }
         };
 
-        Promise.all([fetchKpis()]).finally(() => setLoading(false));
+        fetchKpis().finally(() => setLoading(false));
 
         return () => {
             unsubBlueprint();
         };
-    }, [selectedAgentId]);
+    }, [selectedAgentId, getTransactionsForUser]);
 
     const selectedAgent = useMemo(() => managedAgents.find(a => a.id === selectedAgentId), [managedAgents, selectedAgentId]);
 

@@ -1,3 +1,5 @@
+
+
 import React, { useState, useMemo, useCallback, DragEvent, FC, useEffect } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -223,14 +225,14 @@ const CandidateDetailModal: FC<{
                             {isEditing ? (
                                 <div className="space-y-4">
                                      <h3 className="font-bold text-lg border-b border-border pb-2">Edit Details</h3>
-                                     <div><label className={labelClasses}>Email</label><input type="email" value={editData.email} onChange={e => setEditData({...editData, email: e.target.value})} className={inputClasses}/></div>
-                                     <div><label className={labelClasses}>Phone</label><input type="tel" value={editData.phone || ''} onChange={e => setEditData({...editData, phone: e.target.value})} className={inputClasses}/></div>
+                                     <div><label className={labelClasses}>Email</label><input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} className={inputClasses}/></div>
+                                     <div><label className={labelClasses}>Phone</label><input type="tel" value={editData.phone || ''} onChange={e => setEditData({ ...editData, phone: e.target.value })} className={inputClasses}/></div>
                                      <h3 className="font-bold text-lg border-b border-border pb-2 pt-2">Business Info</h3>
-                                     <div><label className={labelClasses}>Current Brokerage</label><input type="text" value={editData.currentBrokerage || ''} onChange={e => setEditData({...editData, currentBrokerage: e.target.value})} className={inputClasses}/></div>
-                                     <div><label className={labelClasses}>GCI (Last 12 mo)</label><input type="number" value={editData.gciLast12Months || ''} onChange={e => setEditData({...editData, gciLast12Months: Number(e.target.value)})} className={inputClasses}/></div>
-                                     <div><label className={labelClasses}>Units (Last 12 mo)</label><input type="number" value={editData.unitsLast12Months || ''} onChange={e => setEditData({...editData, unitsLast12Months: Number(e.target.value)})} className={inputClasses}/></div>
+                                     <div><label className={labelClasses}>Current Brokerage</label><input type="text" value={editData.currentBrokerage || ''} onChange={e => setEditData({ ...editData, currentBrokerage: e.target.value })} className={inputClasses}/></div>
+                                     <div><label className={labelClasses}>GCI (Last 12 mo)</label><input type="number" value={editData.gciLast12Months || ''} onChange={e => setEditData({ ...editData, gciLast12Months: Number(e.target.value) })} className={inputClasses}/></div>
+                                     <div><label className={labelClasses}>Units (Last 12 mo)</label><input type="number" value={editData.unitsLast12Months || ''} onChange={e => setEditData({ ...editData, unitsLast12Months: Number(e.target.value) })} className={inputClasses}/></div>
                                      <h3 className="font-bold text-lg border-b border-border pb-2 pt-2">Assignment</h3>
-                                     <div><label className={labelClasses}>Pipeline Stage</label><select value={editData.stage} onChange={e => setEditData({...editData, stage: e.target.value as PipelineStage})} className={inputClasses}>{PIPELINE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                                     <div><label className={labelClasses}>Pipeline Stage</label><select value={editData.stage} onChange={e => setEditData({ ...editData, stage: e.target.value as PipelineStage })} className={inputClasses}>{PIPELINE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                                      <div><label className={labelClasses}>Recruiter</label><select value={editData.recruiterId} onChange={e => setEditData({...editData, recruiterId: e.target.value})} className={inputClasses}>{recruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
                                 </div>
                             ) : (
@@ -316,12 +318,12 @@ const RecruitmentHubPage: React.FC = () => {
         let finalUsers: TeamMember[] = [];
     
         try {
-            if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            if ((P.isMcAdmin(userData) || P.isCoach(userData)) && userData.marketCenterId) {
                 [finalCandidates, finalUsers] = await Promise.all([
                     getCandidatesForMarketCenter(userData.marketCenterId),
                     getUsersForMarketCenter(userData.marketCenterId),
                 ]);
-            } else if (P.isRecruiter(userData) || P.isCoach(userData)) { 
+            } else if (P.isRecruiter(userData)) { 
                 finalCandidates = await getCandidatesForRecruiter(user.uid);
                 if (userData.marketCenterId) {
                     try {

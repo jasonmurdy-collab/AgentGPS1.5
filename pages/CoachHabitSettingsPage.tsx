@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { Save, Plus, Trash2, Settings, ArrowLeft, Eye, Edit, Minus } from 'lucide-react';
 import type { HabitTrackerTemplate, HabitActivitySetting } from '../types';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 
 // Preview Component (re-using visual style from DailyHabitsTrackerPage)
@@ -150,7 +150,7 @@ const HabitTrackerDesignerPage: React.FC = () => {
         if (!userData) { setLoading(false); return; }
         setLoading(true);
         try {
-            const templatesRef = collection(db, 'habitTrackerTemplates');
+            const templatesRef = collection(getFirestoreInstance(), 'habitTrackerTemplates');
             const queriesToRun = [
                 query(templatesRef, where('marketCenterId', '==', null)) // Global templates
             ];
@@ -184,22 +184,22 @@ const HabitTrackerDesignerPage: React.FC = () => {
     }, [fetchTemplates]);
 
     const handleCreateNew = () => {
-        if (!user || !userData) return;
+        if (!user) return;
         setEditingTemplate({
             id: '',
             name: 'New Template',
             activities: [],
             creatorId: user.uid,
-            marketCenterId: userData.marketCenterId || null,
+            marketCenterId: userData?.marketCenterId || null,
         });
     };
 
     const handleSaveTemplate = async (template: HabitTrackerTemplate) => {
         setSaving(true);
-        const templatesRef = collection(db, 'habitTrackerTemplates');
+        const templatesRef = collection(getFirestoreInstance(), 'habitTrackerTemplates');
         const docRef = template.id ? doc(templatesRef, template.id) : doc(templatesRef);
         
-        const batch = writeBatch(db);
+        const batch = writeBatch(getFirestoreInstance());
 
         // If setting a default, unset any other template that has it
         if (template.isDefaultForRole) {
@@ -227,7 +227,7 @@ const HabitTrackerDesignerPage: React.FC = () => {
 
     const handleDeleteTemplate = async (templateId: string) => {
         if (window.confirm("Are you sure you want to delete this template? This cannot be undone.")) {
-            await deleteDoc(doc(db, 'habitTrackerTemplates', templateId));
+            await deleteDoc(doc(getFirestoreInstance(), 'habitTrackerTemplates', templateId));
             fetchTemplates();
         }
     };

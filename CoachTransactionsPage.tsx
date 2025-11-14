@@ -1,11 +1,12 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import type { CommissionProfile, Transaction, ProcessedTransaction, TeamMember } from '../types';
 import { BarChartHorizontal, ChevronDown, ChevronUp, Search, AlertTriangle } from 'lucide-react';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs, documentId, doc, getDoc, DocumentSnapshot } from 'firebase/firestore';
 import { processTransactionsForCoach } from '../lib/transactionUtils';
 import { processTransactionDoc } from '../lib/firestoreUtils';
@@ -68,7 +69,7 @@ const CoachTransactionsPage: React.FC = () => {
 
                 const fetchTransactionsForChunk = async (chunk: string[]) => {
                     let tQuery;
-                    const transactionsRef = collection(db, 'transactions');
+                    const transactionsRef = collection(getFirestoreInstance(), 'transactions');
                     
                     if (userData?.role === 'market_center_admin' && userData.marketCenterId) {
                         tQuery = query(transactionsRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
@@ -83,7 +84,7 @@ const CoachTransactionsPage: React.FC = () => {
                 };
 
                 const fetchProfilesForChunk = async (chunk: string[]) => {
-                    const pQuery = query(collection(db, 'commissionProfiles'), where(documentId(), 'in', chunk));
+                    const pQuery = query(collection(getFirestoreInstance(), 'commissionProfiles'), where(documentId(), 'in', chunk));
                     const pSnap = await getDocs(pQuery);
                     return pSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CommissionProfile));
                 };

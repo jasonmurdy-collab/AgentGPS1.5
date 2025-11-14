@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
 import { doc, getDoc } from 'firebase/firestore';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
@@ -186,7 +187,7 @@ const PlaybookViewerPage: React.FC = () => {
             if (!playbookId) { setError("Playbook ID is missing."); setLoading(false); return; }
             setLoading(true);
             try {
-                const docSnap = await getDoc(doc(db, 'playbooks', playbookId));
+                const docSnap = await getDoc(doc(getFirestoreInstance(), 'playbooks', playbookId)); // Fix: Use getFirestoreInstance()
                 if (docSnap.exists()) {
                     const pb = processPlaybookDoc(docSnap);
                     setPlaybook(pb);

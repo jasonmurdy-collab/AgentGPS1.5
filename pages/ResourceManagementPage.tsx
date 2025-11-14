@@ -6,7 +6,7 @@ import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import type { Playbook, LearningPath, NewAgentResources, NewAgentGoalTemplate, NewAgentHomework, NewAgentResourceLink, ChecklistItem } from '../types';
 import { Edit3, Plus, Edit, Trash2, BookOpen, Route, Sparkles, Rocket, Target, ClipboardList, Link as LinkIcon, ListChecks, CheckSquare } from 'lucide-react';
-import { db } from '../firebaseConfig';
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, onSnapshot, orderBy, doc, deleteDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
 import { generatePlaybookFromOutline, generateGoalSuggestions } from '../lib/gemini';
@@ -424,6 +424,7 @@ const ResourceManagementPage: React.FC = () => {
         if (!user) { setLoading(false); return; }
 
         setLoading(true);
+        const db = getFirestoreInstance();
         const playbooksQuery = query(collection(db, 'playbooks'), where('creatorId', '==', user.uid), orderBy('createdAt', 'desc'));
         const learningPathsQuery = query(collection(db, 'learningPaths'), where('creatorId', '==', user.uid));
 
@@ -453,13 +454,13 @@ const ResourceManagementPage: React.FC = () => {
             createdAt: serverTimestamp() as any,
         };
 
-        const docRef = await addDoc(collection(db, 'playbooks'), newPlaybook);
+        const docRef = await addDoc(collection(getFirestoreInstance(), 'playbooks'), newPlaybook);
         navigate(`/resource-management/${docRef.id}`);
     };
 
     const handleDelete = async (collectionName: 'playbooks' | 'learningPaths', id: string) => {
         if (window.confirm(`Are you sure you want to permanently delete this ${collectionName === 'playbooks' ? 'playbook' : 'learning path'}? This action cannot be undone.`)) {
-            await deleteDoc(doc(db, collectionName, id));
+            await deleteDoc(doc(getFirestoreInstance(), collectionName, id));
         }
     };
     
