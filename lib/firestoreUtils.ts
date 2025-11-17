@@ -1,5 +1,3 @@
-
-
 import type { DocumentSnapshot, Timestamp } from 'firebase/firestore';
 import type { Goal, Transaction, Notification, DailyTrackerData, ProspectingSession, CommissionProfile, Playbook, TeamMember, Team, LearningPath, Module, Lesson, PerformanceLog, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, TodoItem } from '../types';
 import { GoalType } from '../types';
@@ -142,6 +140,8 @@ export const processUserDoc = (doc: DocumentSnapshot): TeamMember => {
         assignedLearningPathId: data.assignedLearningPathId || null,
         newAgentResources: data.newAgentResources || {},
         onboardingChecklistProgress: data.onboardingChecklistProgress || [],
+// Fix: Add zapierApiKey to ensure the processed user object matches the TeamMember type.
+        zapierApiKey: data.zapierApiKey,
     };
 };
 

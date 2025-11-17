@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, P } from '../contexts/AuthContext';
@@ -344,7 +345,7 @@ const PlaybookEditorPage: React.FC = () => {
                 setPlaybook(newPlaybook);
                 setLoading(false);
             } else {
-                const docRef = doc(getFirestoreInstance(), 'playbooks', playbookId); // Fix: Use getFirestoreInstance()
+                const docRef = doc(getFirestoreInstance(), 'playbooks', playbookId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists() && docSnap.data().creatorId === user.uid) {
                     setPlaybook(processPlaybookDoc(docSnap));
@@ -368,7 +369,7 @@ const PlaybookEditorPage: React.FC = () => {
         if (!playbook) return;
         setSaving(true);
         try {
-            const docRef = playbook.id ? doc(getFirestoreInstance(), 'playbooks', playbook.id) : doc(collection(getFirestoreInstance(), 'playbooks')); // Fix: Use getFirestoreInstance()
+            const docRef = playbook.id ? doc(getFirestoreInstance(), 'playbooks', playbook.id) : doc(collection(getFirestoreInstance(), 'playbooks'));
             const { id, ...playbookData } = playbook;
             const dataToSave = { ...playbookData, teamId: playbook.teamId || null, marketCenterId: playbook.marketCenterId || null, createdAt: playbook.id ? Timestamp.fromDate(new Date(playbook.createdAt)) : serverTimestamp() };
             await setDoc(docRef, dataToSave, { merge: true });
@@ -465,7 +466,7 @@ const PlaybookEditorPage: React.FC = () => {
         }
     }, [playbook, updatePlaybook]);
     
-    if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+    if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>;
     if (error) return <Card className="m-8 text-center text-destructive">{error}</Card>;
     if (!playbook) return null;
 
@@ -554,8 +555,8 @@ const PlaybookEditorPage: React.FC = () => {
                                         <div className="flex items-center"><button onClick={() => setExpandedModules(p => ({...p, [module.id]: !p[module.id]}))} className="p-2 text-text-secondary hover:bg-primary/10 rounded-full">{expandedModules[module.id] ? <ChevronUp/> : <ChevronDown/>}</button><button onClick={() => deleteModule(module.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded-full"><Trash2 size={16}/></button></div>
                                     </div>
                                     { (expandedModules[module.id] ?? true) && (
-// Fix: Corrected typo from `moduleId` to `module.id` to pass the correct module ID when dropping a new lesson.
-                                        <div onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => handleDropNewLesson(e, module.id)} className="space-y-4 min-h-[60px] border-2 border-dashed border-transparent hover:border-primary/50 p-2 rounded-lg">
+                                        // Fix: Corrected typo from `moduleId` to `module.id` to pass the correct module ID when dropping a new lesson.
+                                        <div onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => handleDropNewLesson(e, module.id)} className="space-y-4 min-h-[60px] border-2 border-dashed border-transparent hover:border-primary/50 p-2 rounded-lg">
                                             {module.lessons.map((lesson) => (
                                                 <div key={lesson.id} onDragOver={e => handleDragOver(e, 'lesson', lesson.id, module.id)} onDrop={() => handleDrop('lesson', lesson.id)} onDragEnd={() => setDraggedItem(null)} className={`transition-all duration-150 ${dragOverItem?.type === 'lesson' && dragOverItem?.id === lesson.id ? 'pt-2' : ''}`}>
                                                     {dragOverItem?.type === 'lesson' && dragOverItem?.id === lesson.id && <div className="h-1 bg-primary/50 rounded-full mb-2" />}

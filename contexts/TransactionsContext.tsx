@@ -24,15 +24,16 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   useEffect(() => {
     let unsubscribe: () => void = () => {};
+    const db = getFirestoreInstance();
 
-    if (authLoading) {
+    if (authLoading || !db) {
       setInternalLoading(true);
       return;
     }
 
     if (user?.uid) {
       setInternalLoading(true);
-      const transactionsCollectionRef = collection(getFirestoreInstance(), 'transactions');
+      const transactionsCollectionRef = collection(db, 'transactions');
       const q = query(
         transactionsCollectionRef, 
         where("userId", "==", user.uid)
@@ -59,10 +60,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [user, authLoading]);
 
   const addTransaction = useCallback(async (newTransaction: Omit<Transaction, 'id' | 'userId'>) => {
-    if (!user || !userData) throw new Error("User not authenticated.");
+    const db = getFirestoreInstance();
+    if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
 
-    const batch = writeBatch(getFirestoreInstance());
-    const newTransactionRef = doc(collection(getFirestoreInstance(), 'transactions'));
+    const batch = writeBatch(db);
+    const newTransactionRef = doc(collection(db, 'transactions'));
     
     const dataToSave: any = {
       ...newTransaction,
@@ -87,16 +89,16 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (listingIncrement > 0) userMetricsUpdate.listings = increment(listingIncrement);
     
     if (Object.keys(userMetricsUpdate).length > 0) {
-        batch.update(doc(getFirestoreInstance(), 'users', user.uid), userMetricsUpdate);
+        batch.update(doc(db, 'users', user.uid), userMetricsUpdate);
     }
 
     if (gci > 0) {
       const gciGoals = goals.filter(g => g.metric.toLowerCase().includes('gci'));
-      gciGoals.forEach(goal => batch.update(doc(getFirestoreInstance(), 'goals', goal.id), { currentValue: increment(gci) }));
+      gciGoals.forEach(goal => batch.update(doc(db, 'goals', goal.id), { currentValue: increment(gci) }));
     }
     if (listingIncrement > 0) {
       const listingGoals = goals.filter(g => g.metric.toLowerCase().includes('listing'));
-      listingGoals.forEach(goal => batch.update(doc(getFirestoreInstance(), 'goals', goal.id), { currentValue: increment(listingIncrement) }));
+      listingGoals.forEach(goal => batch.update(doc(db, 'goals', goal.id), { currentValue: increment(listingIncrement) }));
     }
 
     await batch.commit();
@@ -104,10 +106,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [user, userData, goals]);
 
   const updateTransaction = useCallback(async (transactionId: string, updates: Partial<Omit<Transaction, 'id' | 'userId'>>) => {
-    if (!user) throw new Error("User not authenticated.");
+    const db = getFirestoreInstance();
+    if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
 
-    const batch = writeBatch(getFirestoreInstance());
-    const transactionDocRef = doc(getFirestoreInstance(), 'transactions', transactionId);
+    const batch = writeBatch(db);
+    const transactionDocRef = doc(db, 'transactions', transactionId);
 
     const originalTransaction = transactions.find(t => t.id === transactionId);
     let gciDiff = 0;
@@ -132,7 +135,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (listingsDiff !== 0) userMetricsUpdate.listings = increment(listingsDiff);
 
         if (Object.keys(userMetricsUpdate).length > 0) {
-            batch.update(doc(getFirestoreInstance(), 'users', user.uid), userMetricsUpdate);
+            batch.update(doc(db, 'users', user.uid), userMetricsUpdate);
         }
     }
 
@@ -146,11 +149,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     
     if (gciDiff !== 0) {
       const gciGoals = goals.filter(g => g.metric.toLowerCase().includes('gci'));
-      gciGoals.forEach(goal => batch.update(doc(getFirestoreInstance(), 'goals', goal.id), { currentValue: increment(gciDiff) }));
+      gciGoals.forEach(goal => batch.update(doc(db, 'goals', goal.id), { currentValue: increment(gciDiff) }));
     }
     if (listingsDiff !== 0) {
       const listingGoals = goals.filter(g => g.metric.toLowerCase().includes('listing'));
-      listingGoals.forEach(goal => batch.update(doc(getFirestoreInstance(), 'goals', goal.id), { currentValue: increment(listingsDiff) }));
+      listingGoals.forEach(goal => batch.update(doc(db, 'goals', goal.id), { currentValue: increment(listingsDiff) }));
     }
 
     await batch.commit();
@@ -158,10 +161,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [user, transactions, goals]);
 
   const deleteTransaction = useCallback(async (transactionId: string) => {
-    if (!user) throw new Error("User not authenticated.");
+    const db = getFirestoreInstance();
+    if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
     
-    const batch = writeBatch(getFirestoreInstance());
-    const transactionDocRef = doc(getFirestoreInstance(), 'transactions', transactionId);
+    const batch = writeBatch(db);
+    const transactionDocRef = doc(db, 'transactions', transactionId);
 
     const transactionToDelete = transactions.find(t => t.id === transactionId);
     if (transactionToDelete) {
@@ -173,16 +177,16 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (listingDecrement > 0) userMetricsUpdate.listings = increment(-listingDecrement);
 
         if (Object.keys(userMetricsUpdate).length > 0) {
-            batch.update(doc(getFirestoreInstance(), 'users', user.uid), userMetricsUpdate);
+            batch.update(doc(db, 'users', user.uid), userMetricsUpdate);
         }
         
         if (gci > 0) {
             const gciGoals = goals.filter(g => g.metric.toLowerCase().includes('gci'));
-            gciGoals.forEach(goal => batch.update(doc(getFirestoreInstance(), 'goals', goal.id), { currentValue: increment(-gci) }));
+            gciGoals.forEach(goal => batch.update(doc(db, 'goals', goal.id), { currentValue: increment(-gci) }));
         }
         if (listingDecrement > 0) {
             const listingGoals = goals.filter(g => g.metric.toLowerCase().includes('listing'));
-            listingGoals.forEach(goal => batch.update(doc(getFirestoreInstance(), 'goals', goal.id), { currentValue: increment(-listingDecrement) }));
+            listingGoals.forEach(goal => batch.update(doc(db, 'goals', goal.id), { currentValue: increment(-listingDecrement) }));
         }
     }
 

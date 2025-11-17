@@ -65,7 +65,6 @@ export interface TeamMember {
   assignedLearningPathId?: string;
   newAgentResources?: NewAgentResources;
   onboardingChecklistProgress?: string[];
-// Fix: Add optional zapierApiKey property to the TeamMember interface.
   zapierApiKey?: string;
 }
 

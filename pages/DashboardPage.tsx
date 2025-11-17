@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
@@ -43,7 +44,7 @@ const MyLearning: React.FC<{
 }> = ({ playbooks, progress }) => {
     return (
         <Card>
-            <h3 className="text-lg font-bold mb-4 text-text-primary flex items-center gap-2">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <BookOpen size={20}/> My Learning
             </h3>
             <div className="space-y-4">

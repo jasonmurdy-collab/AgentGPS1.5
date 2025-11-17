@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -348,7 +347,7 @@ const RecruiterDailyTrackerPage: React.FC = () => {
     }, [currentDate]);
 
     if (loading || !trackerData || !habitSettings) {
-        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>;
     }
 
     return (

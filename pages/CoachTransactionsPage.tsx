@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -210,7 +208,7 @@ const CoachTransactionsPage: React.FC = () => {
                     <>
                         <Card>
                             <h2 className="text-xl font-bold mb-4">Summary Totals (Filtered)</h2>
-                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-center">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 text-center">
                                 <div>
                                     <p className="text-xs text-text-secondary uppercase tracking-wider">Transactions</p>
                                     <p className="text-2xl font-bold text-text-primary">{filteredAndSortedTransactions.length.toLocaleString()}</p>

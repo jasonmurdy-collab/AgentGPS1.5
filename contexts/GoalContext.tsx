@@ -51,7 +51,8 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Effect for fetching personal goals, depends only on user auth state
   useEffect(() => {
-    if (authLoading) {
+    const db = getFirestoreInstance();
+    if (authLoading || !db) {
       setLoadingPersonal(true);
       return;
     }
@@ -62,7 +63,7 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setLoadingPersonal(true);
-    const goalsCollectionRef = collection(getFirestoreInstance(), 'goals');
+    const goalsCollectionRef = collection(db, 'goals');
     const personalQuery = query(goalsCollectionRef, where("userId", "==", user.uid));
     
     const unsubscribe = onSnapshot(personalQuery, (querySnapshot) => {
@@ -79,7 +80,8 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Effect for fetching team/managed goals, depends on user data and managed agents list
   useEffect(() => {
-    if (authLoading || !user || !userData) {
+    const db = getFirestoreInstance();
+    if (authLoading || !user || !userData || !db) {
       setLoadingTeam(true);
       return;
     }
@@ -97,7 +99,7 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setLoadingTeam(true);
             try {
                 const q = query(
-                    collection(getFirestoreInstance(), 'goals'), 
+                    collection(db, 'goals'), 
                     where("teamId", "==", userData.teamId), 
                     where("visibility", "in", ["public", "team_view_only"])
                 );
@@ -130,7 +132,7 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setLoadingTeam(true);
-    const goalsCollectionRef = collection(getFirestoreInstance(), 'goals');
+    const goalsCollectionRef = collection(db, 'goals');
     let q;
 
     if (P.isSuperAdmin(userData)) {
@@ -172,7 +174,8 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loading = useMemo(() => authLoading || loadingPersonal || loadingTeam, [authLoading, loadingPersonal, loadingTeam]);
 
   const addGoal = useCallback(async (newGoal: Omit<Goal, 'id' | 'currentValue' | 'userId' | 'teamId' | 'marketCenterId' | 'createdAt' | 'userName' | 'startDate' | 'endDate' | 'coachId'> & { startDate?: string, endDate?: string }, targetUserId?: string) => {
-    if (!user) throw new Error("User not authenticated.");
+    const db = getFirestoreInstance();
+    if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
     
     const finalUserId = targetUserId || user.uid;
     let targetUserData = null;
@@ -202,7 +205,7 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         goalToAdd.endDate = Timestamp.fromDate(new Date(newGoal.endDate));
     }
     
-    await addDoc(collection(getFirestoreInstance(), 'goals'), goalToAdd);
+    await addDoc(collection(db, 'goals'), goalToAdd);
     
     if (targetUserId && user && targetUserId !== user.uid) {
         const message = `${userData?.name || 'A coach'} assigned you a new goal: "${newGoal.title}".`;
@@ -219,8 +222,9 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user, userData, getUserById]);
 
   const updateGoal = useCallback(async (goalId: string, updates: Partial<Omit<Goal, 'id'>>) => {
-    if (!user) throw new Error("User not authenticated.");
-    const goalDocRef = doc(getFirestoreInstance(), 'goals', goalId);
+    const db = getFirestoreInstance();
+    if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+    const goalDocRef = doc(db, 'goals', goalId);
     
     const updatesWithTimestamp: any = { ...updates };
     if (updates.startDate) {
@@ -234,24 +238,27 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   const deleteGoal = useCallback(async (goalId: string) => {
-    if (!user) throw new Error("User not authenticated.");
-    const goalDocRef = doc(getFirestoreInstance(), 'goals', goalId);
+    const db = getFirestoreInstance();
+    if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+    const goalDocRef = doc(db, 'goals', goalId);
     await deleteDoc(goalDocRef);
   }, [user]);
 
   const toggleGoalArchiveStatus = useCallback(async (goalId: string, currentStatus: boolean) => {
-    if (!user) throw new Error("User not authenticated.");
-    const goalDocRef = doc(getFirestoreInstance(), 'goals', goalId);
+    const db = getFirestoreInstance();
+    if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+    const goalDocRef = doc(db, 'goals', goalId);
     await updateDoc(goalDocRef, { isArchived: !currentStatus });
   }, [user]);
 
 
   const updateGoalProgress = useCallback(async (goalId: string, valueToAdd: number) => {
-    if (!user?.uid) throw new Error("User not authenticated.");
-    const goalDocRef = doc(getFirestoreInstance(), 'goals', goalId);
+    const db = getFirestoreInstance();
+    if (!user?.uid || !db) throw new Error("User not authenticated or Firebase not configured.");
+    const goalDocRef = doc(db, 'goals', goalId);
 
     try {
-        await runTransaction(getFirestoreInstance(), async (transaction) => {
+        await runTransaction(db, async (transaction) => {
             const goalDoc = await transaction.get(goalDocRef);
             if (!goalDoc.exists()) {
                 throw "Goal document does not exist!";
@@ -263,7 +270,7 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw "Goal has no owner!";
             }
 
-            const userDocRef = doc(getFirestoreInstance(), 'users', goalOwnerId);
+            const userDocRef = doc(db, 'users', goalOwnerId);
 
             transaction.update(goalDocRef, { currentValue: increment(valueToAdd) });
             transaction.update(userDocRef, { goalScore: increment(valueToAdd) });
@@ -275,11 +282,12 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   const resetGoalProgress = useCallback(async (goalId: string) => {
-    if (!user?.uid) throw new Error("User not authenticated.");
-    const goalDocRef = doc(getFirestoreInstance(), 'goals', goalId);
+    const db = getFirestoreInstance();
+    if (!user?.uid || !db) throw new Error("User not authenticated or Firebase not configured.");
+    const goalDocRef = doc(db, 'goals', goalId);
     
     try {
-        await runTransaction(getFirestoreInstance(), async (transaction) => {
+        await runTransaction(db, async (transaction) => {
             const goalDoc = await transaction.get(goalDocRef);
             if (!goalDoc.exists()) {
                 throw "Goal document does not exist!";
@@ -297,7 +305,7 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw "Goal has no owner!";
             }
 
-            const userDocRef = doc(getFirestoreInstance(), 'users', goalOwnerId);
+            const userDocRef = doc(db, 'users', goalOwnerId);
             const userDoc = await transaction.get(userDocRef);
             if (!userDoc.exists()) {
                 throw "User to update does not exist!";
@@ -313,9 +321,10 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   const getGoalsForUser = useCallback(async (userId: string): Promise<Goal[]> => {
-    if (!user || !userData) return [];
+    const db = getFirestoreInstance();
+    if (!user || !userData || !db) return [];
 
-    const goalsCollectionRef = collection(getFirestoreInstance(), 'goals');
+    const goalsCollectionRef = collection(db, 'goals');
     let q;
     const isManagerViewing = userId !== user.uid;
 
@@ -344,7 +353,9 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user, userData, getUserById]);
 
   const getPublicGoals = useCallback(async (): Promise<Goal[]> => {
-    const goalsCollectionRef = collection(getFirestoreInstance(), 'goals');
+    const db = getFirestoreInstance();
+    if (!db) return [];
+    const goalsCollectionRef = collection(db, 'goals');
     const q = query(
         goalsCollectionRef, 
         where("visibility", "==", "public"),
@@ -356,7 +367,9 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const getAllGoals = useCallback(async (): Promise<Goal[]> => {
-    const goalsCollectionRef = collection(getFirestoreInstance(), 'goals');
+    const db = getFirestoreInstance();
+    if (!db) return [];
+    const goalsCollectionRef = collection(db, 'goals');
     const querySnapshot = await getDocs(goalsCollectionRef);
     return querySnapshot.docs.map(processGoalDoc);
   }, []);

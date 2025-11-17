@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Link } from 'react-router-dom';
@@ -33,7 +35,7 @@ const SignupLinkGenerator: React.FC = () => {
     }, [getAllTeams, getMarketCenters]);
 
     const handleGenerate = () => {
-        const baseUrl = `${window.location.origin}${window.location.pathname}#`;
+        const baseUrl = `${window.location.origin}${window.location.pathname}#/login`;
         const params = new URLSearchParams();
         if (role) params.append('role', role);
         if (teamId) params.append('teamId', teamId);
@@ -275,10 +277,10 @@ const MarketCenterManagement: React.FC = () => {
             ))}
 
             {isCreateModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="create-mc-title">
                     <Card className="w-full max-w-md">
                          <form onSubmit={handleCreate} className="space-y-4">
-                            <h3 className="text-lg font-bold mb-4">Create New Market Center</h3>
+                            <h3 id="create-mc-title" className="text-lg font-bold mb-4">Create New Market Center</h3>
                             <div>
                                 <label htmlFor="mcName" className={labelClasses}>Brokerage Name</label>
                                 <input id="mcName" type="text" value={newMcName} onChange={(e) => setNewMcName(e.target.value)} placeholder="e.g., KW Ignite Realty" className={inputClasses} required />

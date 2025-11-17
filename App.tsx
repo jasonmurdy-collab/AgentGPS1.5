@@ -39,6 +39,7 @@ const CoachingFinancialsPage = lazy(() => import('./pages/CoachingFinancialsPage
 const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage'));
 const HabitTrackerDesignerPage = lazy(() => import('./pages/CoachHabitSettingsPage'));
 const ResourceLibraryPage = lazy(() => import('./pages/ResourceLibraryPage'));
+// Fix: Adjust lazy import to expect a default export for ResourceManagementPage.
 const ResourceManagementPage = lazy(() => import('./pages/ResourceManagementPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage'));

@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
@@ -454,6 +452,7 @@ const AgentAssignmentPage: React.FC = () => {
                 </Card>
             </div>
 
+            {/* Modals are rendered here, outside the main div but within the component's return */}
             <AssignTeamModal
                 isOpen={isAssignTeamModalOpen}
                 onClose={() => { setIsAssignTeamModalOpen(false); setSelectedAgent(null); }}

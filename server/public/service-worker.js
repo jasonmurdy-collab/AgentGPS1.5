@@ -5,8 +5,11 @@
  */
 // service-worker.js
 
-// Define the target URL that we want to intercept and proxy.
-const TARGET_URL_PREFIX = 'https://generativelanguage.googleapis.com';
+// Define the target URLs that we want to intercept and proxy.
+const TARGET_URL_PREFIXES = [
+  'https://generativelanguage.googleapis.com',
+  'https://firestore.googleapis.com' // Add Firestore API to interception
+];
 
 // Installation event:
 self.addEventListener('install', (event) => {
@@ -35,10 +38,13 @@ self.addEventListener('fetch', (event) => {
   try {
     const requestUrl = event.request.url;
 
-    if (requestUrl.startsWith(TARGET_URL_PREFIX)) {
+    // Check if the request URL starts with any of the target prefixes
+    const matchedPrefix = TARGET_URL_PREFIXES.find(prefix => requestUrl.startsWith(prefix));
+
+    if (matchedPrefix) {
       console.log(`Service Worker: Intercepting request to ${requestUrl}`);
 
-      const remainingPathAndQuery = requestUrl.substring(TARGET_URL_PREFIX.length);
+      const remainingPathAndQuery = requestUrl.substring(matchedPrefix.length);
       const proxyUrl = `${self.location.origin}/api-proxy${remainingPathAndQuery}`;
 
       console.log(`Service Worker: Proxying to ${proxyUrl}`);

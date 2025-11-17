@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -246,7 +247,7 @@ const PlaybookViewerPage: React.FC = () => {
         );
     };
     
-    if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+    if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>;
     if (error) return <Card className="m-8 text-center text-destructive">{error}</Card>;
     if (!playbook) return null;
     

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -141,7 +142,7 @@ const ResourceLibraryPage: React.FC = () => {
     }, [progressData, userData?.playbookProgress]);
 
     if (loading) {
-        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>;
     }
 
     return (
@@ -199,5 +200,4 @@ const ResourceLibraryPage: React.FC = () => {
         </div>
     );
 };
-// Fix: Add default export to resolve React.lazy loading issue.
 export default ResourceLibraryPage;

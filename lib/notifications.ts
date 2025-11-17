@@ -1,5 +1,3 @@
-
-
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { getFirestoreInstance } from '../firebaseConfig';
 
@@ -13,7 +11,12 @@ interface CreateNotificationPayload {
 
 export const createNotification = async (payload: CreateNotificationPayload) => {
     try {
-        await addDoc(collection(getFirestoreInstance(), 'notifications'), {
+        const db = getFirestoreInstance();
+        if (!db) {
+            console.warn("Cannot create notification: Firebase is not configured.");
+            return;
+        }
+        await addDoc(collection(db, 'notifications'), {
             ...payload,
             read: false,
             createdAt: serverTimestamp(),

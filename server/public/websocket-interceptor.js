@@ -1,5 +1,8 @@
 (function() {
-  const TARGET_WS_HOST = 'generativelanguage.googleapis.com'; // Host to intercept
+  const TARGET_WS_HOSTS = [
+    'generativelanguage.googleapis.com', // Host to intercept for Gemini API
+    'firestore.googleapis.com'         // Add Firestore host for interception
+  ]; 
   const originalWebSocket = window.WebSocket;
 
   if (!originalWebSocket) {
@@ -19,9 +22,8 @@
         try {
           // For full URLs, parse string and check the host
           if (newUrlString.startsWith('ws://') || newUrlString.startsWith('wss://')) {
-            //URL object again
             const parsedUrl = new URL(newUrlString);
-            if (parsedUrl.host === TARGET_WS_HOST) {
+            if (TARGET_WS_HOSTS.some(host => parsedUrl.host === host)) {
               isTarget = true;
               //use wss if https, else ws
               const proxyScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';

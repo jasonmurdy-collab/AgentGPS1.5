@@ -1,7 +1,7 @@
 
 
 import {
-    LayoutDashboard, Target, Users, UserCircle, Feather, Briefcase,
+    LayoutDashboard, Target, Users, UserCircle, Compass, Briefcase, // Changed Feather to Compass
     ClipboardList, BookOpen, Rocket, DollarSign, BarChartHorizontal,
     Settings, UserSearch, Network, PieChart, UserCheck, Building,
     Edit3, ListTodo
@@ -13,7 +13,7 @@ const navItems = {
     // Core
     DASHBOARD: { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
     GOALS: { name: 'Goals', icon: Target, path: '/goals' },
-    BUSINESS_GPS: { name: 'Business GPS', icon: Feather, path: '/business-gps' },
+    BUSINESS_GPS: { name: 'Business GPS', icon: Compass, path: '/business-gps' }, // Changed Feather to Compass
     CLIENT_PIPELINE: { name: 'Client Pipeline', icon: Users, path: '/client-pipeline' },
     DAILY_TRACKER: { name: 'Daily Tracker', icon: ClipboardList, path: '/daily-tracker' },
     TODOS: { name: 'To-Do List', icon: ListTodo, path: '/todos' },
@@ -40,7 +40,7 @@ const navItems = {
 
     // Coach
     COACH_GOALS: { name: 'My Goals', icon: Target, path: '/coach-goals' },
-    COACH_GPS: { name: 'My Business GPS', icon: Feather, path: '/coach-gps' },
+    COACH_GPS: { name: 'My Business GPS', icon: Compass, path: '/coach-gps' }, // Changed Feather to Compass
     COACH_DAILY_TRACKER: { name: 'My Daily Tracker', icon: ClipboardList, path: '/coach-daily-tracker' },
     COACHING_FINANCIALS: { name: 'Coaching Financials', icon: PieChart, path: '/coaching-financials' },
     COACHING_HUB: { name: 'Coaching Hub', icon: Briefcase, path: '/' },

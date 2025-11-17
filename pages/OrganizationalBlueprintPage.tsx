@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
@@ -261,7 +262,7 @@ const OrganizationalBlueprintPage: React.FC = () => {
     };
 
     if (loading) {
-        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>;
     }
 
     const growthStage = getGrowthStage(blueprint?.nodes || []);

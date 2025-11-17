@@ -1,6 +1,6 @@
 import React, { FC, useMemo } from 'react';
-import type { Candidate } from '../../types';
-import { Card } from '../ui/Card';
+import type { Candidate } from '../../../types';
+import { Card } from '../../ui/Card';
 import { Users, UserCheck, TrendingUp, UserPlus } from 'lucide-react';
 
 const StatCard: FC<{ title: string; value: string | number; icon: FC<any> }> = React.memo(({ title, value, icon: Icon }) => (

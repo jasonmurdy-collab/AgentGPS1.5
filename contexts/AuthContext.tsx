@@ -1,5 +1,3 @@
-
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { getAuthInstance, getFirestoreInstance } from '../firebaseConfig';
 import { 
@@ -179,7 +177,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [agentsError, setAgentsError] = useState<string | null>(null);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(getAuthInstance(), (firebaseUser) => {
+        const auth = getAuthInstance();
+        if (!auth) {
+            console.warn("Firebase not configured: Auth features disabled.");
+            setUser(null);
+            setUserData(null);
+            setLoading(false);
+            return;
+        }
+
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
             if (!firebaseUser) {
                 setUserData(null);
@@ -190,12 +197,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const getUsersByIds = useCallback(async (userIds: string[]): Promise<TeamMember[]> => {
-        if (userIds.length === 0) return [];
+        const db = getFirestoreInstance();
+        if (userIds.length === 0 || !db) return [];
         const users: TeamMember[] = [];
         const chunkSize = 30; 
         for (let i = 0; i < userIds.length; i += chunkSize) {
             const chunk = userIds.slice(i, i + chunkSize);
-            const q = query(collection(getFirestoreInstance(), 'users'), where(documentId(), 'in', chunk));
+            const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
             const snapshot = await getDocs(q);
             snapshot.forEach(doc => {
                 users.push(processUserDoc(doc));
@@ -205,10 +213,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
+        const db = getFirestoreInstance();
+        if (!db) return;
+
         let unsubscribe: (() => void) | undefined;
         if (user) {
             setLoading(true);
-            const userDocRef = doc(getFirestoreInstance(), 'users', user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             unsubscribe = onSnapshot(userDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     setUserData(processUserDoc(docSnap));
@@ -235,7 +246,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user]);
 
     useEffect(() => {
-        if (!userData) {
+        const db = getFirestoreInstance();
+        if (!userData || !db) {
             setManagedAgents([]);
             setLoadingAgents(false);
             setAgentsError(null);
@@ -244,7 +256,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setLoadingAgents(true);
         setAgentsError(null);
-        const usersCollection = collection(getFirestoreInstance(), 'users');
+        const usersCollection = collection(db, 'users');
         let q;
 
         if (P.isSuperAdmin(userData)) {
@@ -279,12 +291,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [userData]);
     
     const signUpWithEmail = useCallback(async (email: string, password: string, name: string, options: { role?: TeamMember['role']; teamId?: string; marketCenterId?: string; } = {}) => {
-        const userCredential = await createUserWithEmailAndPassword(getAuthInstance(), email, password);
+        const auth = getAuthInstance();
+        const db = getFirestoreInstance();
+        if (!auth || !db) {
+            throw new Error("Firebase is not configured. Please check your environment variables.");
+        }
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const newUser = userCredential.user;
 
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
 
-        const userDocRef = doc(getFirestoreInstance(), 'users', newUser.uid);
+        const userDocRef = doc(db, 'users', newUser.uid);
         const userProfile: Omit<UserProfile, 'id'> = {
             name,
             email,
@@ -300,14 +317,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         if (options.teamId) {
-            const teamDocRef = doc(getFirestoreInstance(), 'teams', options.teamId);
+            const teamDocRef = doc(db, 'teams', options.teamId);
             batch.update(teamDocRef, { memberIds: arrayUnion(newUser.uid) });
         }
         
         batch.set(userDocRef, userProfile);
 
         if (options.role === 'market_center_admin' && options.marketCenterId) {
-            const mcDocRef = doc(getFirestoreInstance(), 'marketCenters', options.marketCenterId);
+            const mcDocRef = doc(db, 'marketCenters', options.marketCenterId);
             batch.update(mcDocRef, { adminIds: arrayUnion(newUser.uid) });
         }
 
@@ -315,27 +332,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const signInWithEmail = useCallback(async (email: string, password: string) => {
-        await signInWithEmailAndPassword(getAuthInstance(), email, password);
+        const auth = getAuthInstance();
+        if (!auth) {
+            throw new Error("Firebase is not configured. Please check your environment variables.");
+        }
+        await signInWithEmailAndPassword(auth, email, password);
     }, []);
 
     const logout = useCallback(async () => {
-        await signOut(getAuthInstance());
+        const auth = getAuthInstance();
+        if (auth) {
+            await signOut(auth);
+        }
     }, []);
 
     const updateUserProfile = useCallback(async (profileData: Partial<Pick<TeamMember, 'name' | 'bio'>>) => {
-        if (!user) throw new Error("User not authenticated");
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), profileData);
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await updateDoc(doc(db, 'users', user.uid), profileData);
     }, [user]);
 
     const updatePassword = useCallback(async (password: string) => {
-        if (!getAuthInstance().currentUser) throw new Error("User not authenticated");
-        await firebaseUpdatePassword(getAuthInstance().currentUser, password);
+        const auth = getAuthInstance();
+        if (!auth || !auth.currentUser) throw new Error("User not authenticated or Firebase not configured.");
+        await firebaseUpdatePassword(auth.currentUser, password);
     }, []);
     
     const joinTeam = useCallback(async (teamCode: string) => {
-        if (!user || !userData) return { success: false, message: "You must be logged in to join a team." };
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) return { success: false, message: "You must be logged in to join a team." };
 
-        const q = query(collection(getFirestoreInstance(), 'teams'), where('teamCode', '==', teamCode.trim()));
+        const q = query(collection(db, 'teams'), where('teamCode', '==', teamCode.trim()));
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
             return { success: false, message: "Invalid team code." };
@@ -343,19 +370,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const teamDoc = snapshot.docs[0];
         const teamId = teamDoc.id;
 
-        const batch = writeBatch(getFirestoreInstance());
-        batch.update(doc(getFirestoreInstance(), 'users', user.uid), { teamId });
-        batch.update(doc(getFirestoreInstance(), 'teams', teamId), { memberIds: arrayUnion(user.uid) });
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'users', user.uid), { teamId });
+        batch.update(doc(db, 'teams', teamId), { memberIds: arrayUnion(user.uid) });
         await batch.commit();
         
         return { success: true, message: `Successfully joined ${teamDoc.data().name}!` };
     }, [user, userData]);
 
     const createTeam = useCallback(async (teamName: string) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
 
         const teamCode = `TEAM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        const newTeamRef = doc(collection(getFirestoreInstance(), 'teams'));
+        const newTeamRef = doc(collection(db, 'teams'));
         const newTeam: Team = {
             id: newTeamRef.id,
             name: teamName,
@@ -364,76 +392,94 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             teamCode: teamCode,
         };
 
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
         batch.set(newTeamRef, newTeam);
-        batch.update(doc(getFirestoreInstance(), 'users', user.uid), { role: 'team_leader', teamId: newTeamRef.id });
+        batch.update(doc(db, 'users', user.uid), { role: 'team_leader', teamId: newTeamRef.id });
         await batch.commit();
 
     }, [user, userData]);
     
     const updateTheme = useCallback(async (theme: string) => {
-        if (!user) return;
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), { theme });
+        const db = getFirestoreInstance();
+        if (!user || !db) return;
+        await updateDoc(doc(db, 'users', user.uid), { theme });
     }, [user]);
 
     const getTeamById = useCallback(async (teamId: string) => {
-        const teamDoc = await getDoc(doc(getFirestoreInstance(), 'teams', teamId));
+        const db = getFirestoreInstance();
+        if (!db) return null;
+        const teamDoc = await getDoc(doc(db, 'teams', teamId));
         return teamDoc.exists() ? processTeamDoc(teamDoc) : null;
     }, []);
     
     const getAllUsers = useCallback(async (): Promise<TeamMember[]> => {
-        const snapshot = await getDocs(collection(getFirestoreInstance(), 'users'));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const snapshot = await getDocs(collection(db, 'users'));
         return snapshot.docs.map(processUserDoc);
     }, []);
 
     const getUsersForMarketCenter = useCallback(async (marketCenterId: string): Promise<TeamMember[]> => {
-        const q = query(collection(getFirestoreInstance(), 'users'), where('marketCenterId', '==', marketCenterId));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const q = query(collection(db, 'users'), where('marketCenterId', '==', marketCenterId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processUserDoc);
     }, []);
 
     const leaveTeam = useCallback(async () => {
-        if (!user || !userData?.teamId) return { success: false, message: "You are not on a team." };
+        const db = getFirestoreInstance();
+        if (!user || !userData?.teamId || !db) return { success: false, message: "You are not on a team." };
         if (userData.role === 'team_leader') return { success: false, message: "Team leaders cannot leave their team. You must transfer ownership first." };
         
-        const batch = writeBatch(getFirestoreInstance());
-        batch.update(doc(getFirestoreInstance(), 'users', user.uid), { teamId: deleteField() });
-        batch.update(doc(getFirestoreInstance(), 'teams', userData.teamId), { memberIds: arrayRemove(user.uid) });
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'users', user.uid), { teamId: deleteField() });
+        batch.update(doc(db, 'teams', userData.teamId), { memberIds: arrayRemove(user.uid) });
         await batch.commit();
         return { success: true, message: "You have left the team." };
     }, [user, userData]);
 
     const removeAgentFromTeam = useCallback(async (agentId: string) => {
-        if (!user || userData?.role !== 'team_leader' || !userData.teamId) return { success: false, message: "You don't have permission to do this." };
+        const db = getFirestoreInstance();
+        if (!user || userData?.role !== 'team_leader' || !userData.teamId || !db) return { success: false, message: "You don't have permission to do this." };
         
-        const batch = writeBatch(getFirestoreInstance());
-        batch.update(doc(getFirestoreInstance(), 'users', agentId), { teamId: deleteField() });
-        batch.update(doc(getFirestoreInstance(), 'teams', userData.teamId), { memberIds: arrayRemove(agentId) });
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'users', agentId), { teamId: deleteField() });
+        batch.update(doc(db, 'teams', userData.teamId), { memberIds: arrayRemove(agentId) });
         await batch.commit();
         return { success: true, message: "Agent removed." };
     }, [user, userData]);
 
     const getUserById = useCallback(async (userId: string) => {
-        const userDoc = await getDoc(doc(getFirestoreInstance(), 'users', userId));
+        const db = getFirestoreInstance();
+        if (!db) return null;
+        const userDoc = await getDoc(doc(db, 'users', userId));
         return userDoc.exists() ? processUserDoc(userDoc) : null;
     }, []);
 
     const updateUserNewAgentStatus = useCallback(async (userId: string, isNew: boolean) => {
-        await updateDoc(doc(getFirestoreInstance(), 'users', userId), { isNewAgent: isNew });
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await updateDoc(doc(db, 'users', userId), { isNewAgent: isNew });
     }, []);
 
     const getNewAgentResourcesForUser = useCallback(async (userId: string): Promise<NewAgentResources | null> => {
-        const docRef = doc(getFirestoreInstance(), 'newAgentResources', userId);
+        const db = getFirestoreInstance();
+        if (!db) return null;
+        const docRef = doc(db, 'newAgentResources', userId);
         const docSnap = await getDoc(docRef);
         return docSnap.exists() ? docSnap.data() as NewAgentResources : null;
     }, []);
 
     const saveNewAgentResources = useCallback(async (resources: NewAgentResources) => {
-        if (!user) throw new Error("User not authenticated.");
-        await setDoc(doc(getFirestoreInstance(), 'newAgentResources', user.uid), resources);
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await setDoc(doc(db, 'newAgentResources', user.uid), resources);
     }, [user]);
     
     const updateUserMetrics = useCallback(async (userId: string, metrics: { gci?: number; listings?: number; calls?: number; appointments?: number; }) => {
+        const db = getFirestoreInstance();
+        if (!db) return;
         const updates: { [key: string]: any } = {};
         if (metrics.gci) updates.gci = increment(metrics.gci);
         if (metrics.listings) updates.listings = increment(metrics.listings);
@@ -441,14 +487,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (metrics.appointments) updates.appointments = increment(metrics.appointments);
         
         if (Object.keys(updates).length > 0) {
-            await updateDoc(doc(getFirestoreInstance(), 'users', userId), updates);
+            await updateDoc(doc(db, 'users', userId), updates);
         }
     }, []);
     
     const assignHomeworkToUser = useCallback(async (userId: string, homework: Omit<NewAgentHomework, 'id' | 'userId' | 'teamId' | 'marketCenterId'>) => {
-        if (!user) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
         const targetUser = await getUserById(userId);
-        await addDoc(collection(getFirestoreInstance(), 'homework'), {
+        await addDoc(collection(db, 'homework'), {
             ...homework,
             userId,
             teamId: targetUser?.teamId || null,
@@ -459,8 +506,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData, getUserById]);
 
     const getAssignedResourcesForUser = useCallback(async (userId: string): Promise<AssignedResources> => {
-        const homeworkQuery = query(collection(getFirestoreInstance(), 'homework'), where('userId', '==', userId));
-        const linksQuery = query(collection(getFirestoreInstance(), 'resourceLinks'), where('userId', '==', userId));
+        const db = getFirestoreInstance();
+        if (!db) return { homework: [], resourceLinks: [] };
+        const homeworkQuery = query(collection(db, 'homework'), where('userId', '==', userId));
+        const linksQuery = query(collection(db, 'resourceLinks'), where('userId', '==', userId));
         
         const [hwSnap, linksSnap] = await Promise.all([getDocs(homeworkQuery), getDocs(linksQuery)]);
         
@@ -471,9 +520,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const getHomeworkForManagedUsers = useCallback(async () => {
-        if (managedAgents.length === 0 || !userData || !user) return {};
+        const db = getFirestoreInstance();
+        if (managedAgents.length === 0 || !userData || !user || !db) return {};
         const agentIds = managedAgents.map(a => a.id);
-        const collectionRef = collection(getFirestoreInstance(), 'homework');
+        const collectionRef = collection(db, 'homework');
         const results: NewAgentHomework[] = [];
     
         for (let i = 0; i < agentIds.length; i += 30) {
@@ -505,12 +555,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [managedAgents, userData, user]);
 
     const getHabitLogsForManagedUsers = useCallback(async () => {
-        if (managedAgents.length === 0 || !userData || !user) return {};
+        const db = getFirestoreInstance();
+        if (managedAgents.length === 0 || !userData || !user || !db) return {};
     
         const agentIds = managedAgents.map(a => a.id);
         const results: Record<string, DailyTrackerData[]> = {};
         const allLogs: DailyTrackerData[] = [];
-        const baseRef = collection(getFirestoreInstance(), 'dailyTrackers');
+        const baseRef = collection(db, 'dailyTrackers');
     
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
@@ -544,9 +595,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [managedAgents, userData, user]);
 
     const getHabitLogsForUser = useCallback(async (userId: string): Promise<DailyTrackerData[]> => {
-        if (!user || !userData) return [];
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) return [];
         
-        const baseRef = collection(getFirestoreInstance(), 'dailyTrackers');
+        const baseRef = collection(db, 'dailyTrackers');
         let q;
         const isManagerViewing = userId !== user.uid;
 
@@ -576,34 +628,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData, getUserById]);
     
     const deleteHomeworkForUser = useCallback(async (homeworkId: string) => {
-        await deleteDoc(doc(getFirestoreInstance(), 'homework', homeworkId));
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await deleteDoc(doc(db, 'homework', homeworkId));
     }, []);
 
     const getCommissionProfileForUser = useCallback(async (userId: string): Promise<CommissionProfile | null> => {
-        const docRef = doc(getFirestoreInstance(), 'commissionProfiles', userId);
+        const db = getFirestoreInstance();
+        if (!db) return null;
+        const docRef = doc(db, 'commissionProfiles', userId);
         const docSnap = await getDoc(docRef);
         return docSnap.exists() ? processCommissionProfileDoc(docSnap) : null;
     }, []);
 
     const saveCommissionProfile = useCallback(async (profileData: Omit<CommissionProfile, 'id'>) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
-        await setDoc(doc(getFirestoreInstance(), 'commissionProfiles', user.uid), { 
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await setDoc(doc(db, 'commissionProfiles', user.uid), { 
             ...profileData, 
             marketCenterId: userData.marketCenterId || null 
         });
     }, [user, userData]);
     
     const getAllTransactions = useCallback(async (): Promise<Transaction[]> => {
-        if (!user) return [];
-        const q = query(collection(getFirestoreInstance(), 'transactions'), where('userId', '==', user.uid));
+        const db = getFirestoreInstance();
+        if (!user || !db) return [];
+        const q = query(collection(db, 'transactions'), where('userId', '==', user.uid));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processTransactionDoc);
     }, [user]);
 
     const getTransactionsForUser = useCallback(async (userId: string): Promise<Transaction[]> => {
-        if (!user || !userData) return [];
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) return [];
     
-        const baseRef = collection(getFirestoreInstance(), 'transactions');
+        const baseRef = collection(db, 'transactions');
         let q;
     
         if (userId === user.uid) {
@@ -629,14 +688,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData]);
 
     const getAllCommissionProfiles = useCallback(async (): Promise<CommissionProfile[]> => {
-        const snapshot = await getDocs(collection(getFirestoreInstance(), 'commissionProfiles'));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const snapshot = await getDocs(collection(db, 'commissionProfiles'));
         return snapshot.docs.map(processCommissionProfileDoc);
     }, []);
 
     const addPerformanceLog = useCallback(async (logData: Omit<PerformanceLog, 'id' | 'coachId' | 'date'>) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
         const agent = await getUserById(logData.agentId);
-        await addDoc(collection(getFirestoreInstance(), 'performanceLogs'), {
+        await addDoc(collection(db, 'performanceLogs'), {
             ...logData,
             coachId: user.uid,
             date: serverTimestamp(),
@@ -653,10 +715,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData, getUserById]);
 
     const getPerformanceLogsForAgent = useCallback(async (agentId: string): Promise<PerformanceLog[]> => {
-        if (!userData || !user) return [];
+        const db = getFirestoreInstance();
+        if (!userData || !user || !db) return [];
 
         const isManagerViewing = agentId !== user.uid;
-        const baseRef = collection(getFirestoreInstance(), 'performanceLogs');
+        const baseRef = collection(db, 'performanceLogs');
         let q;
         
         const agentProfile = await getUserById(agentId);
@@ -685,12 +748,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData, getUserById]);
     
     const getPerformanceLogsForManagedUsers = useCallback(async (): Promise<Record<string, PerformanceLog[]>> => {
-        if (managedAgents.length === 0 || !userData || !user) return {};
+        const db = getFirestoreInstance();
+        if (managedAgents.length === 0 || !userData || !user || !db) return {};
     
         const agentIds = managedAgents.map(a => a.id);
         const results: Record<string, PerformanceLog[]> = {};
         const allLogs: PerformanceLog[] = [];
-        const baseRef = collection(getFirestoreInstance(), 'performanceLogs');
+        const baseRef = collection(db, 'performanceLogs');
     
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
@@ -728,20 +792,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, getPerformanceLogsForAgent]);
     
     const updatePerformanceLog = useCallback(async (logId: string, updates: Partial<PerformanceLog>) => {
-        await updateDoc(doc(getFirestoreInstance(), 'performanceLogs', logId), updates);
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await updateDoc(doc(db, 'performanceLogs', logId), updates);
     }, []);
 
     const updateContributingAgents = useCallback(async (agentIds: string[]) => {
-        if (!user) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
         const agentIdsMap = agentIds.reduce((acc, id) => {
             acc[id] = true;
             return acc;
         }, {} as Record<string, boolean>);
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), { contributingAgentIds: agentIdsMap });
+        await updateDoc(doc(db, 'users', user.uid), { contributingAgentIds: agentIdsMap });
     }, [user]);
 
     const updateCoachRoster = useCallback(async (coachId: string, agentIds: string[]) => {
-        const coachDocRef = doc(getFirestoreInstance(), 'users', coachId);
+        const db = getFirestoreInstance();
+        if (!db) return;
+        const coachDocRef = doc(db, 'users', coachId);
     
         const coachDoc = await getDoc(coachDocRef);
         if (!coachDoc.exists()) {
@@ -751,7 +820,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const oldAgentIds = new Set(Object.keys(coachData.contributingAgentIds || {}));
         const newAgentIds = new Set(agentIds);
     
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
     
         const newAgentIdsMap = agentIds.reduce((acc, id) => {
             acc[id] = true;
@@ -761,13 +830,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
         const agentsToAddCoach = [...newAgentIds].filter(id => !oldAgentIds.has(id));
         agentsToAddCoach.forEach(agentId => {
-            const agentDocRef = doc(getFirestoreInstance(), 'users', agentId);
+            const agentDocRef = doc(db, 'users', agentId);
             batch.update(agentDocRef, { coachId: coachId });
         });
     
         const agentsToRemoveCoach = [...oldAgentIds].filter(id => !newAgentIds.has(id));
         agentsToRemoveCoach.forEach(agentId => {
-            const agentDocRef = doc(getFirestoreInstance(), 'users', agentId);
+            const agentDocRef = doc(db, 'users', agentId);
             batch.update(agentDocRef, { coachId: deleteField() });
         });
         
@@ -775,15 +844,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const updateUserCoachAssignment = useCallback(async (agentId: string, newCoachId: string | null) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
     
-        const agentDocRef = doc(getFirestoreInstance(), 'users', agentId);
+        const agentDocRef = doc(db, 'users', agentId);
         const agentDoc = await getDoc(agentDocRef);
         if (!agentDoc.exists()) throw new Error("Agent not found.");
         const currentAgentData = processUserDoc(agentDoc);
         const oldCoachId = currentAgentData.coachId;
     
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
         
         // Update the agent's coachId
         batch.update(agentDocRef, { coachId: newCoachId || deleteField() });
@@ -792,25 +862,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData]);
 
     const updateUserTeamAffiliation = useCallback(async (agentId: string, newTeamId: string | null) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
         
-        const agentDocRef = doc(getFirestoreInstance(), 'users', agentId);
+        const agentDocRef = doc(db, 'users', agentId);
         const agentDoc = await getDoc(agentDocRef);
         if (!agentDoc.exists()) throw new Error("Agent not found.");
         const currentAgentData = processUserDoc(agentDoc);
         const oldTeamId = currentAgentData.teamId;
 
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
 
         batch.update(agentDocRef, { teamId: newTeamId || deleteField() });
 
         if (oldTeamId && oldTeamId !== newTeamId) {
-            const oldTeamRef = doc(getFirestoreInstance(), 'teams', oldTeamId);
+            const oldTeamRef = doc(db, 'teams', oldTeamId);
             batch.update(oldTeamRef, { memberIds: arrayRemove(agentId) });
         }
 
         if (newTeamId && oldTeamId !== newTeamId) {
-            const newTeamRef = doc(getFirestoreInstance(), 'teams', newTeamId);
+            const newTeamRef = doc(db, 'teams', newTeamId);
             batch.update(newTeamRef, { memberIds: arrayUnion(agentId) });
         }
 
@@ -818,14 +889,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData]);
 
     const getBudgetModelForUser = useCallback(async (userId: string): Promise<BudgetModelInputs | null> => {
-        const docRef = doc(getFirestoreInstance(), 'budgetModels', userId);
+        const db = getFirestoreInstance();
+        if (!db) return null;
+        const docRef = doc(db, 'budgetModels', userId);
         const docSnap = await getDoc(docRef);
         return docSnap.exists() ? docSnap.data() as BudgetModelInputs : null;
     }, []);
 
     const saveBudgetModel = useCallback(async (data: BudgetModelInputs) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
-        await setDoc(doc(getFirestoreInstance(), 'budgetModels', user.uid), { 
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await setDoc(doc(db, 'budgetModels', user.uid), { 
             ...data, 
             userId: user.uid,
             marketCenterId: userData.marketCenterId || null 
@@ -833,78 +907,109 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData]);
     
     const getMarketCenters = useCallback(async (): Promise<MarketCenter[]> => {
-        const snapshot = await getDocs(collection(getFirestoreInstance(), 'marketCenters'));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const snapshot = await getDocs(collection(db, 'marketCenters'));
         return snapshot.docs.map(doc => ({id: doc.id, ...(doc.data() as any)}) as MarketCenter);
     }, []);
 
     const createMarketCenter = useCallback(async (mcData: Omit<MarketCenter, 'id' | 'adminIds'>) => {
-        await addDoc(collection(getFirestoreInstance(), 'marketCenters'), { ...mcData, adminIds: [] });
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await addDoc(collection(db, 'marketCenters'), { ...mcData, adminIds: [] });
     }, []);
 
     const deleteMarketCenter = useCallback(async (id: string) => {
-        await deleteDoc(doc(getFirestoreInstance(), 'marketCenters', id));
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await deleteDoc(doc(db, 'marketCenters', id));
     }, []);
 
     const assignMcAdmin = useCallback(async (email: string, marketCenterId: string) => {
-        const q = query(collection(getFirestoreInstance(), 'users'), where('email', '==', email));
+        const db = getFirestoreInstance();
+        if (!db) return;
+        const q = query(collection(db, 'users'), where('email', '==', email));
         const snapshot = await getDocs(q);
         if (snapshot.empty) throw new Error("User with that email not found.");
         const userToUpdate = snapshot.docs[0];
         
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
         batch.update(userToUpdate.ref, { role: 'market_center_admin', marketCenterId });
-        batch.update(doc(getFirestoreInstance(), 'marketCenters', marketCenterId), { adminIds: arrayUnion(userToUpdate.id) });
+        batch.update(doc(db, 'marketCenters', marketCenterId), { adminIds: arrayUnion(userToUpdate.id) });
         await batch.commit();
     }, []);
 
     const removeMcAdmin = useCallback(async (userId: string, marketCenterId: string) => {
-        const batch = writeBatch(getFirestoreInstance());
-        batch.update(doc(getFirestoreInstance(), 'users', userId), { role: 'agent', marketCenterId: deleteField() });
-        batch.update(doc(getFirestoreInstance(), 'marketCenters', marketCenterId), { adminIds: arrayRemove(userId) });
+        const db = getFirestoreInstance();
+        if (!db) return;
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'users', userId), { role: 'agent', marketCenterId: deleteField() });
+        batch.update(doc(db, 'marketCenters', marketCenterId), { adminIds: arrayRemove(userId) });
         await batch.commit();
     }, []);
 
     const updateUserMarketCenter = useCallback(async (marketCenterId: string | null) => {
-        if (!user) throw new Error("User not authenticated.");
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), { marketCenterId: marketCenterId || deleteField() });
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await updateDoc(doc(db, 'users', user.uid), { marketCenterId: marketCenterId || deleteField() });
     }, [user]);
 
     const updateUserMarketCenterForAdmin = useCallback(async (userId: string, marketCenterId: string | null) => {
-        await updateDoc(doc(getFirestoreInstance(), 'users', userId), { marketCenterId: marketCenterId || deleteField() });
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await updateDoc(doc(db, 'users', userId), { marketCenterId: marketCenterId || deleteField() });
     }, []);
 
     const getAllTeams = useCallback(async (): Promise<Team[]> => {
-        const snapshot = await getDocs(collection(getFirestoreInstance(), 'teams'));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const snapshot = await getDocs(collection(db, 'teams'));
         return snapshot.docs.map(d => ({id: d.id, ...(d.data() as any)}) as Team);
     }, []);
 
     const getAllTransactionsForAdmin = useCallback(async (): Promise<Transaction[]> => {
-        const snapshot = await getDocs(collection(getFirestoreInstance(), 'transactions'));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const snapshot = await getDocs(collection(db, 'transactions'));
         return snapshot.docs.map(processTransactionDoc);
     }, []);
     
     const updateUserRole = useCallback(async (userId: string, role: TeamMember['role']) => {
-        await updateDoc(doc(getFirestoreInstance(), 'users', userId), { role });
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await updateDoc(doc(db, 'users', userId), { role });
     }, []);
 
     const getTransactionsForMarketCenter = useCallback(async (marketCenterId: string): Promise<Transaction[]> => {
-        const q = query(collection(getFirestoreInstance(), 'transactions'), where('marketCenterId', '==', marketCenterId));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const q = query(collection(db, 'transactions'), where('marketCenterId', '==', marketCenterId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processTransactionDoc);
     }, []);
 
     const getCommissionProfilesForMarketCenter = useCallback(async (agentIds: string[]): Promise<CommissionProfile[]> => {
-        if (!userData || !userData.marketCenterId) return [];
+        const db = getFirestoreInstance();
+        if (!userData || !db) return [];
+        if (!P.isSuperAdmin(userData) && !userData.marketCenterId) return [];
         if (agentIds.length === 0) return [];
+        
         const profiles: CommissionProfile[] = [];
+        const collectionRef = collection(db, 'commissionProfiles');
+
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                const q = query(
-                    collection(getFirestoreInstance(), 'commissionProfiles'), 
-                    where(documentId(), 'in', chunk),
-                    where('marketCenterId', '==', userData.marketCenterId)
-                );
+                let q;
+                if(P.isSuperAdmin(userData)) {
+                    q = query(collectionRef, where(documentId(), 'in', chunk));
+                } else {
+                    q = query(
+                        collectionRef, 
+                        where(documentId(), 'in', chunk),
+                        where('marketCenterId', '==', userData.marketCenterId)
+                    );
+                }
                 const snapshot = await getDocs(q);
                 snapshot.forEach(doc => {
                     profiles.push(processCommissionProfileDoc(doc));
@@ -915,13 +1020,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [userData]);
     
     const getBudgetModelsForMarketCenter = useCallback(async (marketCenterId: string): Promise<BudgetModelInputs[]> => {
-        const q = query(collection(getFirestoreInstance(), 'budgetModels'), where('marketCenterId', '==', marketCenterId));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const q = query(collection(db, 'budgetModels'), where('marketCenterId', '==', marketCenterId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => doc.data() as BudgetModelInputs);
     }, []);
 
     const getCandidatesForMarketCenter = useCallback(async (marketCenterId: string): Promise<Candidate[]> => {
-        const q = query(collection(getFirestoreInstance(), 'candidates'), where('marketCenterId', '==', marketCenterId));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const q = query(collection(db, 'candidates'), where('marketCenterId', '==', marketCenterId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => {
             const data = doc.data();
@@ -935,7 +1044,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const getCandidatesForRecruiter = useCallback(async (recruiterId: string): Promise<Candidate[]> => {
-        const q = query(collection(getFirestoreInstance(), 'candidates'), where('recruiterId', '==', recruiterId));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const q = query(collection(db, 'candidates'), where('recruiterId', '==', recruiterId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => {
             const data = doc.data();
@@ -949,7 +1060,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const addCandidate = useCallback(async (data: Omit<Candidate, 'id' | 'createdAt' | 'lastContacted'>) => {
-        const docRef = await addDoc(collection(getFirestoreInstance(), 'candidates'), {
+        const db = getFirestoreInstance();
+        if (!db) throw new Error("Firebase not configured.");
+        const docRef = await addDoc(collection(db, 'candidates'), {
             ...data,
             createdAt: serverTimestamp(),
             lastContacted: serverTimestamp(),
@@ -958,19 +1071,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const updateCandidate = useCallback(async (id: string, data: Partial<Candidate>) => {
+        const db = getFirestoreInstance();
+        if (!db) return;
         const { id: candidateId, ...updates } = data;
-        await updateDoc(doc(getFirestoreInstance(), 'candidates', id), {
+        await updateDoc(doc(db, 'candidates', id), {
             ...updates,
             lastContacted: serverTimestamp(),
         });
     }, []);
 
     const deleteCandidate = useCallback(async (id: string) => {
-        await deleteDoc(doc(getFirestoreInstance(), 'candidates', id));
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await deleteDoc(doc(db, 'candidates', id));
     }, []);
     
     const getCandidateActivities = useCallback(async (candidateId: string): Promise<CandidateActivity[]> => {
-        const q = query(collection(getFirestoreInstance(), 'candidateActivities'), where('candidateId', '==', candidateId), orderBy('createdAt', 'desc'));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const q = query(collection(db, 'candidateActivities'), where('candidateId', '==', candidateId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => {
             const data = doc.data();
@@ -983,8 +1102,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const addCandidateActivity = useCallback(async (candidateId: string, note: string) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
-        await addDoc(collection(getFirestoreInstance(), 'candidateActivities'), {
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await addDoc(collection(db, 'candidateActivities'), {
             candidateId,
             note,
             userId: user.uid,
@@ -994,31 +1114,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData]);
 
     const getOrgBlueprintForUser = useCallback(async (userId: string): Promise<OrgBlueprint | null> => {
-        const docRef = doc(getFirestoreInstance(), 'orgBlueprints', userId);
+        const db = getFirestoreInstance();
+        if (!db) return null;
+        const docRef = doc(db, 'orgBlueprints', userId);
         const docSnap = await getDoc(docRef);
         return docSnap.exists() ? docSnap.data() as OrgBlueprint : null;
     }, []);
 
     const updatePlaybookProgress = useCallback(async (playbookId: string, completedLessonIds: string[]) => {
-        if (!user) throw new Error("User not authenticated");
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), {
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await updateDoc(doc(db, 'users', user.uid), {
             [`playbookProgress.${playbookId}`]: completedLessonIds
         });
     }, [user]);
 
     const updateOnboardingChecklistProgress = useCallback(async (completedItemIds: string[]) => {
-        if (!user) throw new Error("User not authenticated");
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), {
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await updateDoc(doc(db, 'users', user.uid), {
             onboardingChecklistProgress: completedItemIds
         });
     }, [user]);
 
     const getPlaybooksForUser = useCallback(async (userId: string): Promise<Playbook[]> => {
-        const userDoc = await getDoc(doc(getFirestoreInstance(), 'users', userId));
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const userDoc = await getDoc(doc(db, 'users', userId));
         const userData = userDoc.exists() ? processUserDoc(userDoc) : null;
         if (!userData) return [];
     
-        const playbooksRef = collection(getFirestoreInstance(), 'playbooks');
+        const playbooksRef = collection(db, 'playbooks');
         const queriesToRun = [
             query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null)), // Global playbooks
         ];
@@ -1043,8 +1169,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- New Client Lead Pipeline Methods ---
     const addClientLead = useCallback(async (data: Omit<ClientLead, 'id' | 'createdAt' | 'lastContacted'>) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
-        const docRef = await addDoc(collection(getFirestoreInstance(), 'clientLeads'), {
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        const docRef = await addDoc(collection(db, 'clientLeads'), {
             ...data,
             createdAt: serverTimestamp(),
             lastContacted: serverTimestamp(),
@@ -1056,43 +1183,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData]);
 
     const updateClientLead = useCallback(async (id: string, data: Partial<ClientLead>) => {
-        if (!user) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
         const { id: clientLeadId, ...updates } = data;
-        await updateDoc(doc(getFirestoreInstance(), 'clientLeads', id), {
+        await updateDoc(doc(db, 'clientLeads', id), {
             ...updates,
             lastContacted: serverTimestamp(),
         });
     }, [user]);
 
     const deleteClientLead = useCallback(async (id: string) => {
-        if (!user) throw new Error("User not authenticated.");
-        await deleteDoc(doc(getFirestoreInstance(), 'clientLeads', id));
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await deleteDoc(doc(db, 'clientLeads', id));
     }, [user]);
 
     const getClientLeadsForUser = useCallback(async (userId: string): Promise<ClientLead[]> => {
-        if (!user) throw new Error("User not authenticated.");
-        const q = query(collection(getFirestoreInstance(), 'clientLeads'), where('ownerId', '==', userId), orderBy('createdAt', 'desc'));
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        const q = query(collection(db, 'clientLeads'), where('ownerId', '==', userId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processClientLeadDoc);
     }, [user]);
 
     const getClientLeadsForTeam = useCallback(async (teamId: string): Promise<ClientLead[]> => {
-        if (!user || !teamId) throw new Error("User not authenticated or team ID missing.");
-        const q = query(collection(getFirestoreInstance(), 'clientLeads'), where('teamId', '==', teamId), orderBy('createdAt', 'desc'));
+        const db = getFirestoreInstance();
+        if (!user || !teamId || !db) throw new Error("User not authenticated, team ID missing, or Firebase not configured.");
+        const q = query(collection(db, 'clientLeads'), where('teamId', '==', teamId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processClientLeadDoc);
     }, [user]);
 
     const getClientLeadActivities = useCallback(async (clientLeadId: string): Promise<ClientLeadActivity[]> => {
-        if (!user) throw new Error("User not authenticated.");
-        const q = query(collection(getFirestoreInstance(), 'clientLeadActivities'), where('clientLeadId', '==', clientLeadId), orderBy('createdAt', 'desc'));
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        const q = query(collection(db, 'clientLeadActivities'), where('clientLeadId', '==', clientLeadId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processClientLeadActivityDoc);
     }, [user]);
 
     const addClientLeadActivity = useCallback(async (clientLeadId: string, note: string) => {
-        if (!user || !userData) throw new Error("User not authenticated.");
-        await addDoc(collection(getFirestoreInstance(), 'clientLeadActivities'), {
+        const db = getFirestoreInstance();
+        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await addDoc(collection(db, 'clientLeadActivities'), {
             clientLeadId,
             note,
             userId: user.uid,
@@ -1104,15 +1237,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- Zapier Integration Methods ---
     const regenerateZapierApiKey = useCallback(async (): Promise<string> => {
-        if (!user) throw new Error("User not authenticated.");
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
         const newKey = crypto.randomUUID();
-        await updateDoc(doc(getFirestoreInstance(), 'users', user.uid), { zapierApiKey: newKey });
+        await updateDoc(doc(db, 'users', user.uid), { zapierApiKey: newKey });
         return newKey;
     }, [user]);
 
     const getWebhooks = useCallback(async (): Promise<Record<string, string>> => {
-        if (!user) return {};
-        const snapshot = await getDocs(collection(getFirestoreInstance(), `users/${user.uid}/webhooks`));
+        const db = getFirestoreInstance();
+        if (!user || !db) return {};
+        const snapshot = await getDocs(collection(db, `users/${user.uid}/webhooks`));
         const webhooks: Record<string, string> = {};
         snapshot.forEach(doc => {
             webhooks[doc.id] = doc.data().url;
@@ -1121,20 +1256,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user]);
 
     const saveWebhook = useCallback(async (event: string, url: string) => {
-        if (!user) throw new Error("User not authenticated.");
-        await setDoc(doc(getFirestoreInstance(), `users/${user.uid}/webhooks`, event), { url });
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await setDoc(doc(db, `users/${user.uid}/webhooks`, event), { url });
     }, [user]);
 
     const deleteWebhook = useCallback(async (event: string) => {
-        if (!user) throw new Error("User not authenticated.");
-        await deleteDoc(doc(getFirestoreInstance(), `users/${user.uid}/webhooks`, event));
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await deleteDoc(doc(db, `users/${user.uid}/webhooks`, event));
     }, [user]);
     // --- End Zapier Integration Methods ---
 
     // --- New Todo List Methods ---
     const addTodo = useCallback(async (text: string, dueDate: string | null, priority: Priority) => {
-        if (!user) throw new Error("User not authenticated.");
-        await addDoc(collection(getFirestoreInstance(), 'todos'), {
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await addDoc(collection(db, 'todos'), {
             userId: user.uid,
             text,
             dueDate: dueDate, // Stored as ISO string or null
@@ -1145,8 +1283,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user]);
 
     const updateTodo = useCallback(async (todoId: string, updates: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt'>>) => {
-        if (!user) throw new Error("User not authenticated.");
-        const todoDocRef = doc(getFirestoreInstance(), 'todos', todoId);
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        const todoDocRef = doc(db, 'todos', todoId);
         
         const updatesWithTimestamp: any = { ...updates };
         if (updates.dueDate === '') { // Allow setting due date to null
@@ -1157,14 +1296,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user]);
 
     const deleteTodo = useCallback(async (todoId: string) => {
-        if (!user) throw new Error("User not authenticated.");
-        await deleteDoc(doc(getFirestoreInstance(), 'todos', todoId));
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        await deleteDoc(doc(db, 'todos', todoId));
     }, [user]);
 
     const getTodosForUserDateRange = useCallback(async (startDate: string, endDate: string): Promise<TodoItem[]> => {
-        if (!user) return [];
+        const db = getFirestoreInstance();
+        if (!user || !db) return [];
         const q = query(
-            collection(getFirestoreInstance(), 'todos'),
+            collection(db, 'todos'),
             where('userId', '==', user.uid),
             where('dueDate', '>=', startDate),
             where('dueDate', '<=', endDate),
@@ -1175,9 +1316,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user]);
 
     const getUndatedTodosForUser = useCallback(async (): Promise<TodoItem[]> => {
-        if (!user) return [];
+        const db = getFirestoreInstance();
+        if (!user || !db) return [];
         const q = query(
-            collection(getFirestoreInstance(), 'todos'),
+            collection(db, 'todos'),
             where('userId', '==', user.uid),
             where('dueDate', '==', null)
             // Removed orderBy('createdAt', 'desc') to simplify indexing
@@ -1206,7 +1348,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
 
-        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser,
+        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser
     }), [
         user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, signInWithEmail, logout,
         updateUserProfile, updatePassword, joinTeam, createTeam, updateTheme, getTeamById, getUsersByIds,
@@ -1226,7 +1368,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
 
-        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser,
+        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser
     ]);
 
     return (

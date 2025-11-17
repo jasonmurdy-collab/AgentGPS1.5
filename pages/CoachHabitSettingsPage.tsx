@@ -261,7 +261,7 @@ const HabitTrackerDesignerPage: React.FC = () => {
                         </h1>
                         <p className="text-lg text-text-secondary mt-1">{pageDescription}</p>
                     </div>
-                    <button onClick={handleCreateNew} className="flex items-center justify-center bg-primary text-on-accent font-semibold py-2 px-4 rounded-lg">
+                    <button onClick={handleCreateNew} className="flex items-center justify-center bg-primary text-on-accent font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors">
                         <Plus className="mr-2" size={20} /> Create New Template
                     </button>
                 </div>

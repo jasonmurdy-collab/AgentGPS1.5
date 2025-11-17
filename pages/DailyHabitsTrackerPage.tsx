@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -197,7 +196,7 @@ const DailyHabitsTrackerPage: React.FC = () => {
     const totalPoints = calculateTotalPoints(trackerData, habitSettings);
 
     if (loading || !trackerData || !habitSettings) {
-        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
+        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>;
     }
 
     return (
@@ -234,7 +233,19 @@ const DailyHabitsTrackerPage: React.FC = () => {
                                         key={activity.id}
                                         label={activity.name} 
                                         value={getMetricValue(trackerData, activity.id)} 
-                                        onUpdate={(val) => handleUpdate(activity.id.includes('pointsActivities') ? activity.id : `pointsActivities.${activity.id}`, val)}
+                                        {/* Fix: Correctly map special activity IDs to their data paths (e.g., 'calls' to 'dials'). */}
+                                        onUpdate={(val) => {
+                                            const path = ({
+                                                'calls': 'dials',
+                                                'doorsKnocked': 'doorsKnocked',
+                                                'knocksAnswered': 'knocksAnswered',
+                                                'contacts': 'prospectingTotals.contacts',
+                                                'listingAptsSet': 'prospectingTotals.listingAptsSet',
+                                                'buyerAptsSet': 'prospectingTotals.buyerAptsSet',
+                                                'lenderAptsSet': 'prospectingTotals.lenderAptsSet',
+                                            } as Record<string, string>)[activity.id] || `pointsActivities.${activity.id}`;
+                                            handleUpdate(path, val);
+                                        }}
                                         unit={activity.unit}
                                         points={activity.worth}
                                     />

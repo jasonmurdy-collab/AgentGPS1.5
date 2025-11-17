@@ -21,7 +21,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (authLoading) {
+        const db = getFirestoreInstance();
+        if (authLoading || !db) {
             setLoading(true);
             return;
         }
@@ -32,7 +33,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
 
         setLoading(true);
-        const notificationsRef = collection(getFirestoreInstance(), 'notifications');
+        const notificationsRef = collection(db, 'notifications');
         const q = query(
             notificationsRef, 
             where("userId", "==", user.uid),
@@ -54,17 +55,22 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
     const markAsRead = useCallback(async (notificationId: string) => {
-        const notificationDocRef = doc(getFirestoreInstance(), 'notifications', notificationId);
+        const db = getFirestoreInstance();
+        if (!db) return;
+        const notificationDocRef = doc(db, 'notifications', notificationId);
         await updateDoc(notificationDocRef, { read: true });
     }, []);
 
     const markAllAsRead = useCallback(async () => {
+        const db = getFirestoreInstance();
+        if (!db) return;
+
         const unread = notifications.filter(n => !n.read);
         if (unread.length === 0) return;
 
-        const batch = writeBatch(getFirestoreInstance());
+        const batch = writeBatch(db);
         unread.forEach(notification => {
-            const docRef = doc(getFirestoreInstance(), 'notifications', notification.id);
+            const docRef = doc(db, 'notifications', notification.id);
             batch.update(docRef, { read: true });
         });
         await batch.commit();

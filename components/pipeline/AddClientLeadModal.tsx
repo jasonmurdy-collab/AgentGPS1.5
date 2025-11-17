@@ -25,19 +25,30 @@ export const AddClientLeadModal: FC<AddClientLeadModalProps> = ({ isOpen, onClos
         e.preventDefault();
         setLoading(true);
         try {
-            await onSubmit({ 
-                name, email, phone, stage, leadSource,
-                budget: Number(budget) || undefined,
+            const data: Omit<ClientLead, 'id' | 'createdAt' | 'lastContacted' | 'ownerId' | 'teamId' | 'marketCenterId'> = {
+                name,
+                email,
+                phone,
+                stage,
+                leadSource,
                 notes,
-            });
+            };
+            
+            const numBudget = Number(budget);
+            if (budget && !isNaN(numBudget)) {
+                data.budget = numBudget;
+            }
+
+            await onSubmit(data);
             setName(''); setEmail(''); setPhone(''); setStage('New Lead');
             setLeadSource(''); setBudget(''); setNotes('');
             onClose();
         } catch (error) {
             console.error(error);
             alert('Failed to add lead.');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     if (!isOpen) return null;

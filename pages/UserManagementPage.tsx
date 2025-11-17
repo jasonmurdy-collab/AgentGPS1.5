@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -223,7 +222,7 @@ const UserManagementPage: React.FC = () => {
     };
 
     if (loading) {
-        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-10 h-10"/></div>;
+        return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-10 h-10" /></div>;
     }
 
     return (
@@ -241,7 +240,7 @@ const UserManagementPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="relative">
                             <label htmlFor="search" className="text-xs font-semibold text-text-secondary">Search</label>
-                            <Search size={16} className="absolute left-3 bottom-2.5 text-text-secondary"/>
+                            <Search size={16} className="absolute left-3 bottom-2.5 text-text-secondary" />
                             <input
                                 id="search"
                                 name="search"
@@ -329,7 +328,7 @@ const UserManagementPage: React.FC = () => {
                                                     title="Edit User"
                                                     disabled={user.id === currentUserData?.id}
                                                 >
-                                                    <Edit size={16}/>
+                                                    <Edit size={16} />
                                                 </button>
                                             )}
                                         </td>

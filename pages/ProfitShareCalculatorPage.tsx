@@ -16,13 +16,13 @@ const LEVEL_DEFINITIONS = [
 interface Recruit {
     id: number;
     name: string;
-    gci: number;
+    gci: number | string;
     level: number;
 }
 
 const ProfitShareCalculatorPage: React.FC = () => {
     // State for the general calculator
-    const [avgProfit, setAvgProfit] = useState(1000);
+    const [avgProfit, setAvgProfit] = useState<number | string>(1000);
     const [agentsPerLevel, setAgentsPerLevel] = useState<number[]>(Array(7).fill(0));
 
     // State for the key recruit analyzer
@@ -45,8 +45,9 @@ const ProfitShareCalculatorPage: React.FC = () => {
     };
 
     const generalResults = useMemo(() => {
+        const parsedAvgProfit = typeof avgProfit === 'string' ? parseInt(avgProfit, 10) || 0 : avgProfit;
         const breakdown = agentsPerLevel.map((numAgents, index) => {
-            return numAgents * avgProfit * (LEVEL_DEFINITIONS[index].percentage / 100);
+            return numAgents * parsedAvgProfit * (LEVEL_DEFINITIONS[index].percentage / 100);
         });
         const monthlyTotal = breakdown.reduce((sum, val) => sum + val, 0);
         const annualTotal = monthlyTotal * 12;
@@ -56,7 +57,7 @@ const ProfitShareCalculatorPage: React.FC = () => {
     
     // --- Key Recruit Analyzer Logic ---
     const addRecruit = () => {
-        setRecruits([...recruits, { id: Date.now(), name: '', gci: 100000, level: 1 }]);
+        setRecruits([...recruits, { id: Date.now(), name: '', gci: '', level: 1 }]);
     };
 
     const removeRecruit = (id: number) => {
@@ -69,7 +70,8 @@ const ProfitShareCalculatorPage: React.FC = () => {
 
     const recruitResults = useMemo(() => {
         const breakdown = recruits.map(recruit => {
-            const monthlyProfitContribution = (recruit.gci / 12) * (companyDollarSplit / 100) * (profitMargin / 100);
+            const parsedGci = typeof recruit.gci === 'string' ? parseInt(recruit.gci, 10) || 0 : recruit.gci;
+            const monthlyProfitContribution = (parsedGci / 12) * (companyDollarSplit / 100) * (profitMargin / 100);
             const profitSharePercentage = LEVEL_DEFINITIONS.find(l => l.level === recruit.level)?.percentage || 0;
             const monthlyProfitShare = monthlyProfitContribution * (profitSharePercentage / 100);
             return {
@@ -117,7 +119,7 @@ const ProfitShareCalculatorPage: React.FC = () => {
                                             id="avgProfit"
                                             type="number"
                                             value={avgProfit}
-                                            onChange={(e) => setAvgProfit(parseInt(e.target.value, 10) || 0)}
+                                            onChange={(e) => setAvgProfit(e.target.value)}
                                             className="w-full bg-input border border-border rounded-md py-2 text-text-primary pl-7"
                                         />
                                     </div>
@@ -228,7 +230,7 @@ const ProfitShareCalculatorPage: React.FC = () => {
                                     </div>
                                     <div className="col-span-1">
                                         <label className="text-xs font-semibold">Annual GCI</label>
-                                        <input type="number" value={recruit.gci > 0 ? recruit.gci : ''} onChange={e => updateRecruit(recruit.id, 'gci', parseInt(e.target.value, 10) || 0)} placeholder="100000" className="w-full bg-input border border-border rounded-md p-2 text-sm" />
+                                        <input type="number" value={recruit.gci} onChange={e => updateRecruit(recruit.id, 'gci', e.target.value)} placeholder="100000" className="w-full bg-input border border-border rounded-md p-2 text-sm" />
                                     </div>
                                     <div className="col-span-1">
                                         <label className="text-xs font-semibold">Level</label>

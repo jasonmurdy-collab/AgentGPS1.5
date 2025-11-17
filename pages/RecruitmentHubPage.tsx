@@ -8,8 +8,8 @@ import type { Candidate, PipelineStage, CandidateActivity, TeamMember } from '..
 import { PIPELINE_STAGES } from '../types';
 import { createPortal } from 'react-dom';
 import { Spinner } from '../components/ui/Spinner';
-import { CandidateCard } from '../components/recruitment/CandidateCard';
-import { RecruitmentStats } from '../components/recruitment/RecruitmentStats';
+import { CandidateCard } from '../components/dashboard/recruitment/CandidateCard';
+import { RecruitmentStats } from '../components/dashboard/recruitment/RecruitmentStats';
 
 // --- UTILITY FUNCTIONS ---
 function timeAgo(dateString: string) {
