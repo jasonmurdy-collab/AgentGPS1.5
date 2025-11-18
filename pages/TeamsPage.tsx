@@ -202,7 +202,7 @@ const TeamsPage: React.FC = () => {
         );
     }
     
-    if (userData?.role === 'agent' && !userData.teamId) {
+    if ((userData?.role === 'agent' || userData?.role === 'team_leader') && !userData.teamId) {
         return (
             <div className="text-center py-8">
                 <Users size={48} className="mx-auto text-accent-secondary mb-4" />
@@ -225,7 +225,7 @@ const TeamsPage: React.FC = () => {
               <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">Team Hub</h1>
               <p className="text-lg text-text-secondary mt-1">Collaborate, compete, and conquer your goals together.</p>
           </div>
-          {userData?.role === 'agent' && !userData.teamId && (
+          {(userData?.role === 'agent' || userData?.role === 'team_leader') && !userData.teamId && (
               <button onClick={handleCreateTeam} disabled={loadingAction} className="flex items-center justify-center bg-primary text-on-accent font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-50">
                   {loadingAction ? <Spinner /> : <UserPlus className="mr-2" size={20} />}
                   Create Team

@@ -395,4 +395,9 @@ export interface TodoItem {
   isCompleted: boolean;
   createdAt: string; // ISO string
   priority: Priority;
+  order: number;
+  clientLeadId?: string | null;
+  candidateId?: string | null;
+  clientLeadName?: string | null;
+  candidateName?: string | null;
 }

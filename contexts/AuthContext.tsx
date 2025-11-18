@@ -158,11 +158,12 @@ interface AuthContextType {
   // --- End Zapier Integration Methods ---
 
   // --- New Todo List Methods ---
-  addTodo: (text: string, dueDate: string | null, priority: Priority) => Promise<void>;
+  addTodo: (data: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt' | 'isCompleted'>>) => Promise<void>;
   updateTodo: (todoId: string, updates: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt'>>) => Promise<void>;
   deleteTodo: (todoId: string) => Promise<void>;
   getTodosForUserDateRange: (startDate: string, endDate: string) => Promise<TodoItem[]>;
   getUndatedTodosForUser: () => Promise<TodoItem[]>;
+  getLinkableContacts: () => Promise<{ leads: ClientLead[], candidates: Candidate[] }>;
   // --- End Todo List Methods ---
 }
 
@@ -1269,17 +1270,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // --- End Zapier Integration Methods ---
 
     // --- New Todo List Methods ---
-    const addTodo = useCallback(async (text: string, dueDate: string | null, priority: Priority) => {
+    const addTodo = useCallback(async (data: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt' | 'isCompleted'>>) => {
         const db = getFirestoreInstance();
         if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
-        await addDoc(collection(db, 'todos'), {
+
+        const dataToSave: any = {
+            ...data,
             userId: user.uid,
-            text,
-            dueDate: dueDate, // Stored as ISO string or null
             isCompleted: false,
             createdAt: serverTimestamp(),
-            priority: priority,
-        });
+            order: data.order || Date.now(),
+            text: data.text || 'New Task',
+            dueDate: data.dueDate || null,
+            priority: data.priority || 'Medium',
+        };
+
+        // If a lead/candidate is linked, fetch its name
+        if (data.clientLeadId) {
+            const leadDoc = await getDoc(doc(db, 'clientLeads', data.clientLeadId));
+            if (leadDoc.exists()) {
+                dataToSave.clientLeadName = leadDoc.data().name;
+            }
+        } else if (data.candidateId) {
+            const candidateDoc = await getDoc(doc(db, 'candidates', data.candidateId));
+            if (candidateDoc.exists()) {
+                dataToSave.candidateName = candidateDoc.data().name;
+            }
+        }
+
+        await addDoc(collection(db, 'todos'), dataToSave);
     }, [user]);
 
     const updateTodo = useCallback(async (todoId: string, updates: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt'>>) => {
@@ -1327,6 +1346,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processTodoItemDoc);
     }, [user]);
+
+    const getLinkableContacts = useCallback(async (): Promise<{ leads: ClientLead[], candidates: Candidate[] }> => {
+        if (!user || !userData) return { leads: [], candidates: [] };
+        
+        let leads: ClientLead[] = [];
+        let candidates: Candidate[] = [];
+        
+        // Get client leads
+        if (P.isTeamLeader(userData) && userData.teamId) {
+            leads = await getClientLeadsForTeam(userData.teamId);
+        } else {
+            leads = await getClientLeadsForUser(user.uid);
+        }
+    
+        // Get recruitment candidates
+        if (P.isRecruiter(userData) || P.isCoach(userData) || P.isMcAdmin(userData) || P.isSuperAdmin(userData)) {
+            if (P.isMcAdmin(userData) && userData.marketCenterId) {
+                candidates = await getCandidatesForMarketCenter(userData.marketCenterId);
+            } else if (P.isRecruiter(userData)) {
+                candidates = await getCandidatesForRecruiter(user.uid);
+            }
+        }
+    
+        return { leads, candidates };
+    }, [user, userData, getClientLeadsForTeam, getClientLeadsForUser, getCandidatesForMarketCenter, getCandidatesForRecruiter]);
     // --- End Todo List Methods ---
 
     const value = useMemo(() => ({
@@ -1348,7 +1392,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
 
-        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser
+        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts
     }), [
         user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, signInWithEmail, logout,
         updateUserProfile, updatePassword, joinTeam, createTeam, updateTheme, getTeamById, getUsersByIds,
@@ -1368,7 +1412,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
 
-        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser
+        addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts
     ]);
 
     return (

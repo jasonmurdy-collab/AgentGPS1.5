@@ -10,6 +10,7 @@ const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
+    const [selectedRole, setSelectedRole] = useState<string>('agent');
     const [agreed, setAgreed] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -25,6 +26,7 @@ const LoginPage: React.FC = () => {
         if (role || teamId || mcId) {
             setIsSignUp(true); // Force sign up view if params are present
             setSignupParams({ role: role || undefined, teamId: teamId || undefined, mcId: mcId || undefined });
+            if (role) setSelectedRole(role);
         }
     }, [location.search]);
 
@@ -47,7 +49,7 @@ const LoginPage: React.FC = () => {
                     return;
                 }
                 await signUpWithEmail(email, password, name, {
-                    role: signupParams.role as TeamMember['role'],
+                    role: (signupParams.role || selectedRole) as TeamMember['role'],
                     teamId: signupParams.teamId,
                     marketCenterId: signupParams.mcId
                 });
@@ -90,18 +92,35 @@ const LoginPage: React.FC = () => {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {isSignUp && (
-                            <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">Full Name</label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className={inputClasses}
-                                    placeholder="e.g., Alex Rider"
-                                    required
-                                />
-                            </div>
+                            <>
+                                <div>
+                                    <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">Full Name</label>
+                                    <input
+                                        type="text"
+                                        id="name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        className={inputClasses}
+                                        placeholder="e.g., Alex Rider"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="role" className="block text-sm font-medium text-text-secondary mb-1">I am a...</label>
+                                    <select
+                                        id="role"
+                                        value={selectedRole}
+                                        onChange={(e) => setSelectedRole(e.target.value)}
+                                        className={inputClasses}
+                                        disabled={!!signupParams.role}
+                                    >
+                                        <option value="agent">Real Estate Agent</option>
+                                        <option value="team_leader">Team Leader</option>
+                                        <option value="productivity_coach">Productivity Coach</option>
+                                        <option value="recruiter">Recruiter</option>
+                                    </select>
+                                </div>
+                            </>
                         )}
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">Email Address</label>

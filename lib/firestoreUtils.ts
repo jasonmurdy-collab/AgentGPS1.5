@@ -231,5 +231,10 @@ export const processTodoItemDoc = (doc: DocumentSnapshot): TodoItem => {
         isCompleted: data.isCompleted || false,
         createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
         priority: data.priority || 'Medium',
+        order: data.order || 0,
+        clientLeadId: data.clientLeadId || null,
+        candidateId: data.candidateId || null,
+        clientLeadName: data.clientLeadName || null,
+        candidateName: data.candidateName || null,
     };
 };
