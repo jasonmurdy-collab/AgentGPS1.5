@@ -1,6 +1,5 @@
 
-
-import React, { useState, useMemo, useCallback, DragEvent, FC, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, DragEvent, FC, useEffect, lazy, Suspense } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { UserSearch, PlusCircle, Mail, Phone, X, Trash2, Edit, Send, Briefcase, User, PhoneCall, Mail as MailIcon, DollarSign, ClipboardList } from 'lucide-react';
@@ -52,8 +51,8 @@ const AddCandidateModal: FC<{
             await onSubmit({ 
                 name, email, phone, stage, recruiterId: user.uid, marketCenterId: userData.marketCenterId,
                 currentBrokerage, 
-                gciLast12Months: Number(gciLast12Months) || undefined,
-                unitsLast12Months: Number(unitsLast12Months) || undefined,
+                gciLast12Months: Number(gciLast12Months) || 0,
+                unitsLast12Months: Number(unitsLast12Months) || 0,
             });
             setName(''); setEmail(''); setPhone(''); setStage('Lead');
             setCurrentBrokerage(''); setGciLast12Months(''); setUnitsLast12Months('');

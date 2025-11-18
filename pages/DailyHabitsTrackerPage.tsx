@@ -28,13 +28,13 @@ const defaultHabitActivities: HabitActivitySetting[] = [
     { id: 'new_leads', name: 'New Leads Added', worth: 1, unit: 'lead' },
 ];
 
-const getInitialTrackerData = (userId: string, date: Date, teamId?: string | null, marketCenterId?: string | null): Omit<DailyTrackerData, 'id'> => {
+const getInitialTrackerData = (userId: string, date: Date, teamId?: string | null, marketCenterId?: string | null, coachId?: string | null): Omit<DailyTrackerData, 'id'> => {
     const dateString = date.toISOString().split('T')[0];
     const schedule: { [time: string]: string } = {};
     const times = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'];
     times.forEach(time => { schedule[time] = ''; });
     return {
-        userId, date: dateString, teamId: teamId || null, marketCenterId: marketCenterId || null,
+        userId, date: dateString, teamId: teamId || null, marketCenterId: marketCenterId || null, coachId: coachId || null,
         dials: 0, doorsKnocked: 0, knocksAnswered: 0,
         pointsActivities: {},
         prospectingSessions: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '14:00', endTime: '16:00' }],
@@ -52,6 +52,7 @@ const getMetricValue = (data: DailyTrackerData, activityId: string): number => {
         case 'listingAptsSet': return data.prospectingTotals?.listingAptsSet || 0;
         case 'buyerAptsSet': return data.prospectingTotals?.buyerAptsSet || 0;
         case 'lenderAptsSet': return data.prospectingTotals?.lenderAptsSet || 0;
+        // Fix: Changed 'activity.id' to 'activityId' to correctly reference the function parameter.
         default: return data.pointsActivities?.[activityId] || 0;
     }
 };
@@ -83,21 +84,97 @@ const PrintableTracker: React.FC<{ data: DailyTrackerData; settings: HabitTracke
 };
 
 // --- Reusable Components ---
-const MetricStepper: React.FC<{ label: string; value: number; onUpdate: (newValue: number) => void; unit: string; points: number; }> = ({ label, value, onUpdate, unit, points }) => (
+const MetricStepper: React.FC<{ label: string; value: number; onUpdate: (newValue: number) => void; unit: string; points: number; }> = React.memo(({ label, value, onUpdate, unit, points }) => (
     <div className="bg-background/50 p-3 rounded-lg flex items-center justify-between">
         <div className="flex-1 pr-2">
             <p className="font-bold text-text-primary truncate">{label}</p>
             <p className="text-xs text-text-secondary">{points} {points === 1 ? 'pt' : 'pts'} / {unit}</p>
         </div>
         <div className="flex items-center gap-2">
-            <button onClick={() => onUpdate(Math.max(0, value - 1))} className="w-8 h-8 flex items-center justify-center bg-primary/10 text-primary rounded-full hover:bg-primary/20"><Minus size={16}/></button>
-            <input type="number" value={value} onChange={e => onUpdate(parseInt(e.target.value, 10) || 0)} className="w-16 text-center font-bold text-2xl bg-transparent"/>
-            <button onClick={() => onUpdate(value + 1)} className="w-8 h-8 flex items-center justify-center bg-primary/10 text-primary rounded-full hover:bg-primary/20"><Plus size={16}/></button>
+            <button 
+                onClick={() => onUpdate(Math.max(0, value - 1))} 
+                className="w-8 h-8 flex items-center justify-center bg-primary/10 text-primary rounded-full transition-colors hover:bg-primary/20 disabled:opacity-50"
+                aria-label={`Decrease ${label}`}
+            >
+                <Minus size={16}/>
+            </button>
+            <input 
+                type="number" 
+                value={value} 
+                onChange={e => onUpdate(parseInt(e.target.value, 10) || 0)} 
+                className="w-16 text-center font-bold text-2xl bg-transparent border-b-2 border-border focus:border-primary focus:outline-none transition-colors"
+                aria-label={label}
+            />
+            <button 
+                onClick={() => onUpdate(value + 1)} 
+                className="w-8 h-8 flex items-center justify-center bg-primary/10 text-primary rounded-full transition-colors hover:bg-primary/20"
+                aria-label={`Increase ${label}`}
+            >
+                <Plus size={16}/>
+            </button>
         </div>
     </div>
-);
+));
 
-// ... other section components (Prospecting, Schedule, Notes) would go here, similar to Coach tracker
+const ProspectingSessionSection: React.FC<{ sessions: [ProspectingSession, ProspectingSession]; onUpdate: (path: string, value: any) => void; }> = React.memo(({ sessions, onUpdate }) => (
+    <Card>
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><Clock/> Prospecting Sessions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {sessions.map((session, index) => (
+                <div key={index} className="bg-background/50 p-3 rounded-lg">
+                    <h3 className="font-semibold mb-2">Session {index + 1}</h3>
+                    <div className="flex items-center gap-2">
+                        <input type="time" value={session.startTime} onChange={e => onUpdate(`prospectingSessions.${index}.startTime`, e.target.value)} className="w-full bg-input border border-border rounded-md px-2 py-1 text-sm"/>
+                        <span>to</span>
+                        <input type="time" value={session.endTime} onChange={e => onUpdate(`prospectingSessions.${index}.endTime`, e.target.value)} className="w-full bg-input border border-border rounded-md px-2 py-1 text-sm"/>
+                    </div>
+                </div>
+            ))}
+        </div>
+    </Card>
+));
+
+const ScheduleSection: React.FC<{ schedule: { [time: string]: string }; onUpdate: (path: string, value: any) => void; }> = React.memo(({ schedule, onUpdate }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    const formatTime = (time24: string) => {
+        if (!time24) return '';
+        const [hour, minute] = time24.split(':');
+        const h = parseInt(hour, 10);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h % 12 === 0 ? 12 : h % 12;
+        return `${displayHour}:${minute} ${ampm}`;
+    };
+
+    return (
+        <Card className="p-0 overflow-hidden">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5 transition-colors">
+                <h2 className="text-2xl font-bold flex items-center gap-3"><Calendar/> Today's Schedule</h2>
+                <ChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isOpen ? 'max-h-[2000px]' : 'max-h-0'}`}>
+                <div className="p-4 border-t border-border">
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                        {schedule && Object.keys(schedule).sort().map(time => (
+                            <div key={time} className="flex items-center gap-2">
+                                <span className="w-20 text-sm font-semibold text-text-secondary">{formatTime(time)}</span>
+                                <input type="text" value={schedule[time]} onChange={e => onUpdate(`schedule.${time}`, e.target.value)} className="w-full bg-input border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"/>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </Card>
+    );
+});
+
+const NotesSection: React.FC<{ notes: string; onUpdate: (path: string, value: any) => void; }> = React.memo(({ notes, onUpdate }) => (
+    <Card>
+        <h2 className="text-2xl font-bold mb-2 flex items-center gap-3"><FileText/> Key Conversations & Wins</h2>
+        <textarea value={notes} onChange={e => onUpdate('notes', e.target.value)} className="w-full min-h-[150px] bg-input border border-border rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Log wins, challenges, breakthroughs, and important conversations..."/>
+    </Card>
+));
+
 
 const DailyHabitsTrackerPage: React.FC = () => {
     const { user, userData } = useAuth();
@@ -174,7 +251,7 @@ const DailyHabitsTrackerPage: React.FC = () => {
             const snapshot = await getDocs(q);
             if (snapshot.empty) {
                 setDocId(null);
-                setTrackerData(getInitialTrackerData(user.uid, currentDate, userData?.teamId, userData?.marketCenterId) as DailyTrackerData);
+                setTrackerData(getInitialTrackerData(user.uid, currentDate, userData?.teamId, userData?.marketCenterId, userData?.coachId) as DailyTrackerData);
             } else {
                 const doc = snapshot.docs[0];
                 setDocId(doc.id);
@@ -233,7 +310,6 @@ const DailyHabitsTrackerPage: React.FC = () => {
                                         key={activity.id}
                                         label={activity.name} 
                                         value={getMetricValue(trackerData, activity.id)} 
-                                        {/* Fix: Correctly map special activity IDs to their data paths (e.g., 'calls' to 'dials'). */}
                                         onUpdate={(val) => {
                                             const path = ({
                                                 'calls': 'dials',
@@ -254,7 +330,9 @@ const DailyHabitsTrackerPage: React.FC = () => {
                         </Card>
                     </div>
                      <div className="space-y-6">
-                        {/* Prospecting, Schedule, Notes sections would go here */}
+                        <ProspectingSessionSection sessions={trackerData.prospectingSessions} onUpdate={handleUpdate} />
+                        <ScheduleSection schedule={trackerData.schedule} onUpdate={handleUpdate} />
+                        <NotesSection notes={trackerData.notes} onUpdate={handleUpdate} />
                     </div>
                 </div>
             </div>
