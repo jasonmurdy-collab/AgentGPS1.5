@@ -38,23 +38,18 @@ import { processDailyTrackerDoc, processTransactionDoc, processNotificationDoc, 
 import type { Team, TeamMember, NewAgentResources, NewAgentGoalTemplate, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, ProspectingSession, MarketCenter, Goal, Lesson, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem, Priority } from '../types';
 
 // --- PERMISSION HELPERS ---
-// This object centralizes role-based access control logic.
-// The hierarchy is generally: Super Admin > MC Admin > Prod. Coach > Team Leader > Agent
-// Recruiter is a separate track.
 export const P = {
-  // Hierarchical checks (if you're a coach, you're also a team leader)
   isSuperAdmin: (user: TeamMember | null): boolean => !!user?.isSuperAdmin,
   isMcAdmin: (user: TeamMember | null): boolean => P.isSuperAdmin(user) || user?.role === 'market_center_admin',
   isCoach: (user: TeamMember | null): boolean => P.isMcAdmin(user) || user?.role === 'productivity_coach',
   isTeamLeader: (user: TeamMember | null): boolean => P.isCoach(user) || user?.role === 'team_leader',
   isRecruiter: (user: TeamMember | null): boolean => user?.role === 'recruiter',
   
-  // Specific, non-hierarchical checks for routing
-  canManageResources: (user: TeamMember | null): boolean => P.isTeamLeader(user) || P.isCoach(user) || P.isMcAdmin(user), // For playbooks etc. TL, Coach, MCA, SA
-  canAccessCoachingTools: (user: TeamMember | null): boolean => user?.role === 'team_leader' || user?.role === 'productivity_coach', // for agent logs, agent architect. Just TL and Coach
-  canSeeMyPerformance: (user: TeamMember | null): boolean => user?.role === 'agent' || user?.role === 'team_leader', // for my performance. Agent, TL.
-  canSeeGrowthArchitect: (user: TeamMember | null): boolean => P.isMcAdmin(user) || user?.role === 'agent' || P.isTeamLeader(user), // MCA, SA, TL, Agent. Excludes Coach.
-  canSeeRecruitmentPlaybook: (user: TeamMember | null): boolean => user?.role === 'team_leader' || user?.role === 'recruiter', // TL, Recruiter only.
+  canManageResources: (user: TeamMember | null): boolean => P.isTeamLeader(user) || P.isCoach(user) || P.isMcAdmin(user),
+  canAccessCoachingTools: (user: TeamMember | null): boolean => user?.role === 'team_leader' || user?.role === 'productivity_coach',
+  canSeeMyPerformance: (user: TeamMember | null): boolean => user?.role === 'agent' || user?.role === 'team_leader',
+  canSeeGrowthArchitect: (user: TeamMember | null): boolean => P.isMcAdmin(user) || user?.role === 'agent' || P.isTeamLeader(user),
+  canSeeRecruitmentPlaybook: (user: TeamMember | null): boolean => user?.role === 'team_leader' || user?.role === 'recruiter',
   canManageClientPipeline: (user: TeamMember | null): boolean => user?.role === 'agent' || P.isTeamLeader(user),
 };
 
@@ -111,6 +106,8 @@ interface AuthContextType {
   updatePerformanceLog: (logId: string, updates: Partial<PerformanceLog>) => Promise<void>;
   updateContributingAgents: (agentIds: string[]) => Promise<void>;
   updateCoachRoster: (coachId: string, agentIds: string[]) => Promise<void>;
+  updateUserCoachAssignment: (agentId: string, newCoachId: string | null) => Promise<void>;
+  updateUserTeamAffiliation: (agentId: string, newTeamId: string | null) => Promise<void>;
   getBudgetModelForUser: (userId: string) => Promise<BudgetModelInputs | null>;
   saveBudgetModel: (data: BudgetModelInputs) => Promise<void>;
   getMarketCenters: () => Promise<MarketCenter[]>;
@@ -119,12 +116,12 @@ interface AuthContextType {
   assignMcAdmin: (email: string, marketCenterId: string) => Promise<void>;
   removeMcAdmin: (userId: string, marketCenterId: string) => Promise<void>;
   updateUserMarketCenter: (marketCenterId: string | null) => Promise<void>;
-  updateUserMarketCenterForAdmin: (userId: string, marketCenterId: string | null) => Promise<void>;
-  updateUserCoachAssignment: (agentId: string, newCoachId: string | null) => Promise<void>;
-  updateUserTeamAffiliation: (agentId: string, newTeamId: string | null) => Promise<void>;
+  updateUserRole: (userId: string, role: TeamMember['role']) => Promise<void>; // Basic role update
+  updateUserMarketCenterForAdmin: (userId: string, marketCenterId: string | null) => Promise<void>; // Basic MC update on user doc
+  updateUserRoleAndMarketCenterAffiliation: (userId: string, newRole: TeamMember['role'], newMarketCenterId: string | null) => Promise<void>; // Comprehensive update including marketCenter adminIds
+
   getAllTeams: () => Promise<Team[]>;
   getAllTransactionsForAdmin: () => Promise<Transaction[]>;
-  updateUserRole: (userId: string, role: TeamMember['role']) => Promise<void>;
   updatePlaybookProgress: (playbookId: string, completedLessonIds: string[]) => Promise<void>;
   updateOnboardingChecklistProgress: (completedItemIds: string[]) => Promise<void>;
   getPlaybooksForUser: (userId: string) => Promise<Playbook[]>;
@@ -140,7 +137,6 @@ interface AuthContextType {
   addCandidateActivity: (candidateId: string, note: string) => Promise<void>;
   getOrgBlueprintForUser: (userId: string) => Promise<OrgBlueprint | null>;
   
-  // --- New Client Lead Pipeline Methods ---
   addClientLead: (data: Omit<ClientLead, 'id' | 'createdAt' | 'lastContacted'>) => Promise<string>;
   updateClientLead: (id: string, data: Partial<ClientLead>) => Promise<void>;
   deleteClientLead: (id: string) => Promise<void>;
@@ -148,23 +144,18 @@ interface AuthContextType {
   getClientLeadsForTeam: (teamId: string) => Promise<ClientLead[]>;
   getClientLeadActivities: (clientLeadId: string) => Promise<ClientLeadActivity[]>;
   addClientLeadActivity: (clientLeadId: string, note: string) => Promise<void>;
-  // --- End New Client Lead Pipeline Methods ---
 
-  // --- Zapier Integration Methods ---
   regenerateZapierApiKey: () => Promise<string>;
   getWebhooks: () => Promise<Record<string, string>>;
   saveWebhook: (event: string, url: string) => Promise<void>;
   deleteWebhook: (event: string) => Promise<void>;
-  // --- End Zapier Integration Methods ---
 
-  // --- New Todo List Methods ---
   addTodo: (data: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt' | 'isCompleted'>>) => Promise<void>;
   updateTodo: (todoId: string, updates: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt'>>) => Promise<void>;
   deleteTodo: (todoId: string) => Promise<void>;
   getTodosForUserDateRange: (startDate: string, endDate: string) => Promise<TodoItem[]>;
   getUndatedTodosForUser: () => Promise<TodoItem[]>;
   getLinkableContacts: () => Promise<{ leads: ClientLead[], candidates: Candidate[] }>;
-  // --- End Todo List Methods ---
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -294,110 +285,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const signUpWithEmail = useCallback(async (email: string, password: string, name: string, options: { role?: TeamMember['role']; teamId?: string; marketCenterId?: string; } = {}) => {
         const auth = getAuthInstance();
         const db = getFirestoreInstance();
-        if (!auth || !db) {
-            throw new Error("Firebase is not configured. Please check your environment variables.");
-        }
+        if (!auth || !db) throw new Error("Firebase is not configured.");
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const newUser = userCredential.user;
-
         const batch = writeBatch(db);
-
         const userDocRef = doc(db, 'users', newUser.uid);
         const userProfile: Omit<UserProfile, 'id'> = {
-            name,
-            email,
-            role: options.role || 'agent',
-            gci: 0,
-            listings: 0,
-            calls: 0,
-            appointments: 0,
-            isNewAgent: true,
-            playbookProgress: {},
-            teamId: options.teamId || null,
-            marketCenterId: options.marketCenterId || null,
+            name, email, role: options.role || 'agent', gci: 0, listings: 0, calls: 0, appointments: 0,
+            isNewAgent: true, playbookProgress: {}, teamId: options.teamId || null, marketCenterId: options.marketCenterId || null,
         };
-
-        if (options.teamId) {
-            const teamDocRef = doc(db, 'teams', options.teamId);
-            batch.update(teamDocRef, { memberIds: arrayUnion(newUser.uid) });
-        }
-        
+        if (options.teamId) batch.update(doc(db, 'teams', options.teamId), { memberIds: arrayUnion(newUser.uid) });
         batch.set(userDocRef, userProfile);
-
-        if (options.role === 'market_center_admin' && options.marketCenterId) {
-            const mcDocRef = doc(db, 'marketCenters', options.marketCenterId);
-            batch.update(mcDocRef, { adminIds: arrayUnion(newUser.uid) });
-        }
-
+        if (options.role === 'market_center_admin' && options.marketCenterId) batch.update(doc(db, 'marketCenters', options.marketCenterId), { adminIds: arrayUnion(newUser.uid) });
         await batch.commit();
     }, []);
 
     const signInWithEmail = useCallback(async (email: string, password: string) => {
         const auth = getAuthInstance();
-        if (!auth) {
-            throw new Error("Firebase is not configured. Please check your environment variables.");
-        }
+        if (!auth) throw new Error("Firebase is not configured.");
         await signInWithEmailAndPassword(auth, email, password);
     }, []);
 
     const logout = useCallback(async () => {
         const auth = getAuthInstance();
-        if (auth) {
-            await signOut(auth);
-        }
+        if (auth) await signOut(auth);
     }, []);
 
     const updateUserProfile = useCallback(async (profileData: Partial<Pick<TeamMember, 'name' | 'bio'>>) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("User not authenticated.");
         await updateDoc(doc(db, 'users', user.uid), profileData);
     }, [user]);
 
     const updatePassword = useCallback(async (password: string) => {
         const auth = getAuthInstance();
-        if (!auth || !auth.currentUser) throw new Error("User not authenticated or Firebase not configured.");
+        if (!auth?.currentUser) throw new Error("User not authenticated.");
         await firebaseUpdatePassword(auth.currentUser, password);
     }, []);
     
     const joinTeam = useCallback(async (teamCode: string) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) return { success: false, message: "You must be logged in to join a team." };
-
+        if (!user || !userData || !db) return { success: false, message: "Not logged in." };
         const q = query(collection(db, 'teams'), where('teamCode', '==', teamCode.trim()));
         const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-            return { success: false, message: "Invalid team code." };
-        }
+        if (snapshot.empty) return { success: false, message: "Invalid team code." };
         const teamDoc = snapshot.docs[0];
         const teamId = teamDoc.id;
-
         const batch = writeBatch(db);
         batch.update(doc(db, 'users', user.uid), { teamId });
         batch.update(doc(db, 'teams', teamId), { memberIds: arrayUnion(user.uid) });
         await batch.commit();
-        
-        return { success: true, message: `Successfully joined ${teamDoc.data().name}!` };
+        return { success: true, message: `Joined ${teamDoc.data().name}!` };
     }, [user, userData]);
 
     const createTeam = useCallback(async (teamName: string) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
-
+        if (!user || !userData || !db) throw new Error("Auth error.");
         const teamCode = `TEAM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         const newTeamRef = doc(collection(db, 'teams'));
-        const newTeam: Team = {
-            id: newTeamRef.id,
-            name: teamName,
-            creatorId: user.uid,
-            memberIds: [user.uid],
-            teamCode: teamCode,
-        };
-
         const batch = writeBatch(db);
-        batch.set(newTeamRef, newTeam);
+        batch.set(newTeamRef, { id: newTeamRef.id, name: teamName, creatorId: user.uid, memberIds: [user.uid], teamCode });
         batch.update(doc(db, 'users', user.uid), { role: 'team_leader', teamId: newTeamRef.id });
         await batch.commit();
-
     }, [user, userData]);
     
     const updateTheme = useCallback(async (theme: string) => {
@@ -430,20 +379,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const leaveTeam = useCallback(async () => {
         const db = getFirestoreInstance();
-        if (!user || !userData?.teamId || !db) return { success: false, message: "You are not on a team." };
-        if (userData.role === 'team_leader') return { success: false, message: "Team leaders cannot leave their team. You must transfer ownership first." };
-        
+        if (!user || !userData?.teamId || !db) return { success: false, message: "Not on a team." };
+        if (userData.role === 'team_leader') return { success: false, message: "Team leaders cannot leave." };
         const batch = writeBatch(db);
         batch.update(doc(db, 'users', user.uid), { teamId: deleteField() });
         batch.update(doc(db, 'teams', userData.teamId), { memberIds: arrayRemove(user.uid) });
         await batch.commit();
-        return { success: true, message: "You have left the team." };
+        return { success: true, message: "Left team." };
     }, [user, userData]);
 
     const removeAgentFromTeam = useCallback(async (agentId: string) => {
         const db = getFirestoreInstance();
-        if (!user || userData?.role !== 'team_leader' || !userData.teamId || !db) return { success: false, message: "You don't have permission to do this." };
-        
+        if (!user || userData?.role !== 'team_leader' || !userData.teamId || !db) return { success: false, message: "Permission denied." };
         const batch = writeBatch(db);
         batch.update(doc(db, 'users', agentId), { teamId: deleteField() });
         batch.update(doc(db, 'teams', userData.teamId), { memberIds: arrayRemove(agentId) });
@@ -474,9 +421,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const saveNewAgentResources = useCallback(async (resources: NewAgentResources) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
-        await setDoc(doc(db, 'newAgentResources', user.uid), resources);
-    }, [user]);
+        if (!user || !userData || !db) throw new Error("Auth error.");
+        // Add scoping fields to the document for security rules
+        await setDoc(doc(db, 'newAgentResources', user.uid), {
+            ...resources,
+            userId: user.uid,
+            teamId: userData.teamId || null,
+            marketCenterId: userData.marketCenterId || null,
+            coachId: userData.coachId || null
+        });
+    }, [user, userData]);
     
     const updateUserMetrics = useCallback(async (userId: string, metrics: { gci?: number; listings?: number; calls?: number; appointments?: number; }) => {
         const db = getFirestoreInstance();
@@ -486,79 +440,91 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (metrics.listings) updates.listings = increment(metrics.listings);
         if (metrics.calls) updates.calls = increment(metrics.calls);
         if (metrics.appointments) updates.appointments = increment(metrics.appointments);
-        
-        if (Object.keys(updates).length > 0) {
-            await updateDoc(doc(db, 'users', userId), updates);
-        }
+        if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'users', userId), updates);
     }, []);
     
     const assignHomeworkToUser = useCallback(async (userId: string, homework: Omit<NewAgentHomework, 'id' | 'userId' | 'teamId' | 'marketCenterId'>) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         const targetUser = await getUserById(userId);
         await addDoc(collection(db, 'homework'), {
-            ...homework,
-            userId,
-            teamId: targetUser?.teamId || null,
-            marketCenterId: targetUser?.marketCenterId || null,
-            coachId: targetUser?.coachId || null,
+            ...homework, userId, teamId: targetUser?.teamId || null, marketCenterId: targetUser?.marketCenterId || null, coachId: targetUser?.coachId || null,
         });
-        await createNotification({ userId, message: `${userData?.name} assigned you new homework: "${homework.title}"`, link: '/my-launchpad', triggeredByUserId: user.uid, triggeredByUserName: userData?.name });
+        await createNotification({ userId, message: `${userData?.name} assigned homework: "${homework.title}"`, link: '/my-launchpad', triggeredByUserId: user.uid, triggeredByUserName: userData?.name });
     }, [user, userData, getUserById]);
 
-    const getAssignedResourcesForUser = useCallback(async (userId: string): Promise<AssignedResources> => {
+    const getAssignedResourcesForUser = useCallback(async (targetUserId: string): Promise<AssignedResources> => {
         const db = getFirestoreInstance();
-        if (!db) return { homework: [], resourceLinks: [] };
-        const homeworkQuery = query(collection(db, 'homework'), where('userId', '==', userId));
-        const linksQuery = query(collection(db, 'resourceLinks'), where('userId', '==', userId));
+        if (!db || !user || !userData) return { homework: [], resourceLinks: [] };
+
+        const homeworkRef = collection(db, 'homework');
+        const linksRef = collection(db, 'resourceLinks');
         
-        const [hwSnap, linksSnap] = await Promise.all([getDocs(homeworkQuery), getDocs(linksQuery)]);
-        
-        return {
-            homework: hwSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as NewAgentHomework),
-            resourceLinks: linksSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as NewAgentResourceLink),
-        };
-    }, []);
+        let hwQuery;
+        let linksQuery;
+
+        if (targetUserId === user.uid) {
+             hwQuery = query(homeworkRef, where('userId', '==', targetUserId));
+             linksQuery = query(linksRef, where('userId', '==', targetUserId));
+        } else {
+             // Manager viewing agent - must include scoping field to satisfy security rules
+             if (P.isSuperAdmin(userData)) {
+                 hwQuery = query(homeworkRef, where('userId', '==', targetUserId));
+                 linksQuery = query(linksRef, where('userId', '==', targetUserId));
+             } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+                 hwQuery = query(homeworkRef, where('userId', '==', targetUserId), where('marketCenterId', '==', userData.marketCenterId));
+                 linksQuery = query(linksRef, where('userId', '==', targetUserId), where('marketCenterId', '==', userData.marketCenterId));
+             } else if (P.isCoach(userData)) {
+                 hwQuery = query(homeworkRef, where('userId', '==', targetUserId), where('coachId', '==', user.uid));
+                 linksQuery = query(linksRef, where('userId', '==', targetUserId), where('coachId', '==', user.uid)); 
+             } else if (P.isTeamLeader(userData) && userData.teamId) {
+                 hwQuery = query(homeworkRef, where('userId', '==', targetUserId), where('teamId', '==', userData.teamId));
+                 linksQuery = query(linksRef, where('userId', '==', targetUserId), where('teamId', '==', userData.teamId));
+             } else {
+                 // Fallback / No permission
+                 return { homework: [], resourceLinks: [] };
+             }
+        }
+
+        try {
+            const [hwSnap, linksSnap] = await Promise.all([
+                getDocs(hwQuery),
+                getDocs(linksQuery)
+            ]);
+            return {
+                homework: hwSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as NewAgentHomework),
+                resourceLinks: linksSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as NewAgentResourceLink),
+            };
+        } catch (error) {
+            console.error("Error fetching assigned resources:", error);
+            return { homework: [], resourceLinks: [] };
+        }
+    }, [user, userData]);
 
     const getHomeworkForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
         if (managedAgents.length === 0 || !userData || !user || !db) return {};
         const agentIds = managedAgents.map(a => a.id);
-        const collectionRef = collection(db, 'homework');
         const results: NewAgentHomework[] = [];
+        const collectionRef = collection(db, 'homework');
     
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
             if (chunk.length === 0) continue;
-    
             let q;
-            if (P.isSuperAdmin(userData)) {
-                q = query(collectionRef, where('userId', 'in', chunk));
-            } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                q = query(collectionRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
-            } else if (P.isCoach(userData)) {
-                q = query(collectionRef, where('coachId', '==', user.uid), where('userId', 'in', chunk));
-            } else if (P.isTeamLeader(userData) && userData.teamId) {
-                q = query(collectionRef, where('teamId', '==', userData.teamId), where('userId', 'in', chunk));
-            }
+            if (P.isSuperAdmin(userData)) q = query(collectionRef, where('userId', 'in', chunk));
+            else if (P.isMcAdmin(userData) && userData.marketCenterId) q = query(collectionRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
+            else if (P.isCoach(userData)) q = query(collectionRef, where('coachId', '==', user.uid), where('userId', 'in', chunk));
+            else if (P.isTeamLeader(userData) && userData.teamId) q = query(collectionRef, where('teamId', '==', userData.teamId), where('userId', 'in', chunk));
             
-            if (q) {
-                const snapshot = await getDocs(q);
-                snapshot.forEach(doc => results.push({ id: doc.id, ...(doc.data() as any) }));
-            }
+            if (q) { const snapshot = await getDocs(q); snapshot.forEach(doc => results.push({ id: doc.id, ...(doc.data() as any) })); }
         }
-        
-        return results.reduce((acc, hw) => {
-            if (!acc[hw.userId]) acc[hw.userId] = [];
-            acc[hw.userId].push(hw);
-            return acc;
-        }, {} as Record<string, NewAgentHomework[]>);
+        return results.reduce((acc, hw) => { if (!acc[hw.userId]) acc[hw.userId] = []; acc[hw.userId].push(hw); return acc; }, {} as Record<string, NewAgentHomework[]>);
     }, [managedAgents, userData, user]);
 
     const getHabitLogsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
         if (managedAgents.length === 0 || !userData || !user || !db) return {};
-    
         const agentIds = managedAgents.map(a => a.id);
         const results: Record<string, DailyTrackerData[]> = {};
         const allLogs: DailyTrackerData[] = [];
@@ -568,62 +534,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const chunk = agentIds.slice(i, i + 30);
             if (chunk.length > 0) {
                 let q;
-                if (P.isSuperAdmin(userData)) {
-                    q = query(baseRef, where('userId', 'in', chunk));
-                } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                    q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
-                } else if (P.isCoach(userData)) {
-                    q = query(baseRef, where('coachId', '==', user.uid), where('userId', 'in', chunk));
-                } else if (P.isTeamLeader(userData) && userData.teamId) {
-                    q = query(baseRef, where('teamId', '==', userData.teamId), where('userId', 'in', chunk));
-                }
+                if (P.isSuperAdmin(userData)) q = query(baseRef, where('userId', 'in', chunk));
+                else if (P.isMcAdmin(userData) && userData.marketCenterId) q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
+                else if (P.isCoach(userData)) q = query(baseRef, where('coachId', '==', user.uid), where('userId', 'in', chunk));
+                else if (P.isTeamLeader(userData) && userData.teamId) q = query(baseRef, where('teamId', '==', userData.teamId), where('userId', 'in', chunk));
                 
-                if (q) {
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(doc => allLogs.push(processDailyTrackerDoc(doc)));
-                }
+                if (q) { const snapshot = await getDocs(q); snapshot.forEach(doc => allLogs.push(processDailyTrackerDoc(doc))); }
             }
         }
-    
-        agentIds.forEach(agentId => {
-            results[agentId] = allLogs
-                .filter(log => log.userId === agentId)
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .slice(0, 10);
-        });
-    
+        agentIds.forEach(agentId => { results[agentId] = allLogs.filter(log => log.userId === agentId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10); });
         return results;
     }, [managedAgents, userData, user]);
 
     const getHabitLogsForUser = useCallback(async (userId: string): Promise<DailyTrackerData[]> => {
         const db = getFirestoreInstance();
         if (!user || !userData || !db) return [];
-        
         const baseRef = collection(db, 'dailyTrackers');
         let q;
-        const isManagerViewing = userId !== user.uid;
-
-        if (isManagerViewing) {
+        if (userId !== user.uid) {
             const agentProfile = await getUserById(userId);
             if (!agentProfile) return [];
-            
-            if (P.isSuperAdmin(userData)) {
-                q = query(baseRef, where('userId', '==', userId), orderBy('date', 'desc'));
-            } else if (P.isMcAdmin(userData) && userData.marketCenterId === agentProfile.marketCenterId) {
-                q = query(baseRef, where('userId', '==', userId), orderBy('date', 'desc'));
-            } else if (P.isCoach(userData) && agentProfile.coachId === user.uid) {
-                q = query(baseRef, where('userId', '==', userId), orderBy('date', 'desc'));
-            } else if (P.isTeamLeader(userData) && userData.teamId === agentProfile.teamId) {
-                q = query(baseRef, where('userId', '==', userId), orderBy('date', 'desc'));
-            } else {
-                return []; // No permission
-            }
+            if (P.isSuperAdmin(userData)) q = query(baseRef, where('userId', '==', userId), orderBy('date', 'desc'));
+            else if (P.isMcAdmin(userData) && userData.marketCenterId === agentProfile.marketCenterId) q = query(baseRef, where('userId', '==', userId), where('marketCenterId', '==', userData.marketCenterId), orderBy('date', 'desc'));
+            else if (P.isCoach(userData) && agentProfile.coachId === user.uid) q = query(baseRef, where('userId', '==', userId), where('coachId', '==', user.uid), orderBy('date', 'desc'));
+            else if (P.isTeamLeader(userData) && userData.teamId === agentProfile.teamId) q = query(baseRef, where('userId', '==', userId), where('teamId', '==', userData.teamId), orderBy('date', 'desc'));
+            else return [];
         } else {
             q = query(baseRef, where('userId', '==', userId), orderBy('date', 'desc'));
         }
-
         if (!q) return [];
-
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processDailyTrackerDoc);
     }, [user, userData, getUserById]);
@@ -644,10 +583,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const saveCommissionProfile = useCallback(async (profileData: Omit<CommissionProfile, 'id'>) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !userData || !db) throw new Error("Auth error.");
+        // Add scoping fields for rules
         await setDoc(doc(db, 'commissionProfiles', user.uid), { 
             ...profileData, 
-            marketCenterId: userData.marketCenterId || null 
+            userId: user.uid,
+            marketCenterId: userData.marketCenterId || null,
+            teamId: userData.teamId || null,
+            coachId: userData.coachId || null
         });
     }, [user, userData]);
     
@@ -662,28 +605,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getTransactionsForUser = useCallback(async (userId: string): Promise<Transaction[]> => {
         const db = getFirestoreInstance();
         if (!user || !userData || !db) return [];
-    
         const baseRef = collection(db, 'transactions');
         let q;
-    
         if (userId === user.uid) {
-            // User fetching their own data
             q = query(baseRef, where('userId', '==', userId));
         } else {
-            // Manager fetching agent's data. Query must be scoped to what manager can see.
-            if (P.isSuperAdmin(userData)) {
-                q = query(baseRef, where('userId', '==', userId));
-            } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', userId));
-            } else if (P.isCoach(userData) && !P.isMcAdmin(userData)) { // Don't double-query for MC Admins who are also coaches
-                q = query(baseRef, where('coachId', '==', user.uid), where('userId', '==', userId));
-            } else if (P.isTeamLeader(userData) && userData.teamId) {
-                q = query(baseRef, where('teamId', '==', userData.teamId), where('userId', '==', userId));
-            } else {
-                return []; // No permissions or invalid scope
-            }
+            if (P.isSuperAdmin(userData)) q = query(baseRef, where('userId', '==', userId));
+            else if (P.isMcAdmin(userData) && userData.marketCenterId) q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', userId));
+            else if (P.isCoach(userData) && !P.isMcAdmin(userData)) q = query(baseRef, where('coachId', '==', user.uid), where('userId', '==', userId));
+            else if (P.isTeamLeader(userData) && userData.teamId) q = query(baseRef, where('teamId', '==', userData.teamId), where('userId', '==', userId));
+            else return [];
         }
-        
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processTransactionDoc);
     }, [user, userData]);
@@ -697,53 +629,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const addPerformanceLog = useCallback(async (logData: Omit<PerformanceLog, 'id' | 'coachId' | 'date'>) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !userData || !db) throw new Error("Auth error.");
         const agent = await getUserById(logData.agentId);
         await addDoc(collection(db, 'performanceLogs'), {
-            ...logData,
-            coachId: user.uid,
-            date: serverTimestamp(),
-            teamId: agent?.teamId || null,
+            ...logData, 
+            coachId: user.uid, 
+            date: serverTimestamp(), 
+            teamId: agent?.teamId || null, 
             marketCenterId: agent?.marketCenterId || null,
+            assignedCoachId: agent?.coachId || null // Save the assigned coach for permission checks
         });
-        await createNotification({
-            userId: logData.agentId,
-            message: `${userData.name} added a new performance log for you.`,
-            link: '/my-performance',
-            triggeredByUserId: user.uid,
-            triggeredByUserName: userData.name
-        });
+        await createNotification({ userId: logData.agentId, message: `${userData.name} added a performance log.`, link: '/my-performance', triggeredByUserId: user.uid, triggeredByUserName: userData.name });
     }, [user, userData, getUserById]);
 
     const getPerformanceLogsForAgent = useCallback(async (agentId: string): Promise<PerformanceLog[]> => {
         const db = getFirestoreInstance();
         if (!userData || !user || !db) return [];
-
         const isManagerViewing = agentId !== user.uid;
         const baseRef = collection(db, 'performanceLogs');
         let q;
-        
         const agentProfile = await getUserById(agentId);
         if (!agentProfile) return [];
-
+        
         if (isManagerViewing) {
             if (P.isSuperAdmin(userData)) {
                 q = query(baseRef, where('agentId', '==', agentId), orderBy('date', 'desc'));
             } else if (P.isMcAdmin(userData) && userData.marketCenterId === agentProfile.marketCenterId) {
-                q = query(baseRef, where('agentId', '==', agentId), orderBy('date', 'desc'));
+                q = query(baseRef, where('agentId', '==', agentId), where('marketCenterId', '==', userData.marketCenterId), orderBy('date', 'desc'));
             } else if (P.isCoach(userData) && agentProfile.coachId === user.uid) {
-                q = query(baseRef, where('agentId', '==', agentId), orderBy('date', 'desc'));
+                 // Removed author filter to allow assigned coach to see all logs for their agent (e.g. from MC Admin)
+                 if (!userData.marketCenterId) return []; // Safety check
+                 // Filter by agentId and MC to use index
+                q = query(baseRef, where('agentId', '==', agentId), where('marketCenterId', '==', userData.marketCenterId), orderBy('date', 'desc'));
             } else if (P.isTeamLeader(userData) && userData.teamId === agentProfile.teamId) {
-                q = query(baseRef, where('agentId', '==', agentId), orderBy('date', 'desc'));
+                q = query(baseRef, where('agentId', '==', agentId), where('teamId', '==', userData.teamId), orderBy('date', 'desc'));
             } else {
-                // Not a manager of this agent
                 return [];
             }
         } else {
-            // Viewing their own logs
             q = query(baseRef, where('agentId', '==', agentId), orderBy('date', 'desc'));
         }
-
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processPerformanceLogDoc);
     }, [user, userData, getUserById]);
@@ -751,39 +676,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getPerformanceLogsForManagedUsers = useCallback(async (): Promise<Record<string, PerformanceLog[]>> => {
         const db = getFirestoreInstance();
         if (managedAgents.length === 0 || !userData || !user || !db) return {};
-    
         const agentIds = managedAgents.map(a => a.id);
         const results: Record<string, PerformanceLog[]> = {};
         const allLogs: PerformanceLog[] = [];
         const baseRef = collection(db, 'performanceLogs');
-    
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
             if (chunk.length > 0) {
                 let q;
-                if (P.isSuperAdmin(userData)) {
-                    q = query(baseRef, where('agentId', 'in', chunk));
-                } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                    q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('agentId', 'in', chunk));
-                } else if (P.isCoach(userData)) {
-                    q = query(baseRef, where('coachId', '==', user.uid), where('agentId', 'in', chunk));
-                } else if (P.isTeamLeader(userData) && userData.teamId) {
-                    q = query(baseRef, where('teamId', '==', userData.teamId), where('agentId', 'in', chunk));
+                if (P.isSuperAdmin(userData)) q = query(baseRef, where('agentId', 'in', chunk));
+                else if (P.isMcAdmin(userData) && userData.marketCenterId) q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('agentId', 'in', chunk));
+                else if (P.isCoach(userData)) {
+                    // Allow coach to see all logs for managed agents
+                     q = query(baseRef, where('marketCenterId', '==', userData.marketCenterId), where('agentId', 'in', chunk));
                 }
+                else if (P.isTeamLeader(userData) && userData.teamId) q = query(baseRef, where('teamId', '==', userData.teamId), where('agentId', 'in', chunk));
                 
-                if (q) {
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(doc => allLogs.push(processPerformanceLogDoc(doc)));
-                }
+                if (q) { const snapshot = await getDocs(q); snapshot.forEach(doc => allLogs.push(processPerformanceLogDoc(doc))); }
             }
         }
-    
-        agentIds.forEach(agentId => {
-            results[agentId] = allLogs
-                .filter(log => log.agentId === agentId)
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        });
-    
+        agentIds.forEach(agentId => { results[agentId] = allLogs.filter(log => log.agentId === agentId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); });
         return results;
     }, [managedAgents, userData, user]);
 
@@ -800,11 +712,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updateContributingAgents = useCallback(async (agentIds: string[]) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
-        const agentIdsMap = agentIds.reduce((acc, id) => {
-            acc[id] = true;
-            return acc;
-        }, {} as Record<string, boolean>);
+        if (!user || !db) throw new Error("Auth error.");
+        const agentIdsMap = agentIds.reduce((acc, id) => { acc[id] = true; return acc; }, {} as Record<string, boolean>);
         await updateDoc(doc(db, 'users', user.uid), { contributingAgentIds: agentIdsMap });
     }, [user]);
 
@@ -812,80 +721,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const db = getFirestoreInstance();
         if (!db) return;
         const coachDocRef = doc(db, 'users', coachId);
-    
         const coachDoc = await getDoc(coachDocRef);
-        if (!coachDoc.exists()) {
-            throw new Error("Coach not found!");
-        }
-        const coachData = coachDoc.data() as UserProfile;
+        if (!coachDoc.exists()) throw new Error("Coach not found!");
+        const coachData = coachDoc.data() as TeamMember;
         const oldAgentIds = new Set(Object.keys(coachData.contributingAgentIds || {}));
-        const newAgentIds = new Set(agentIds);
-    
+        const newAgentIdsSet = new Set(agentIds); // Renamed to avoid confusion with the map
+        // DO add comment above each fix.
+        // Fix: Create newAgentIdsMap from newAgentIdsSet
+        const newAgentIdsMap: Record<string, boolean> = {};
+        newAgentIdsSet.forEach(id => {
+            newAgentIdsMap[id] = true;
+        });
         const batch = writeBatch(db);
-    
-        const newAgentIdsMap = agentIds.reduce((acc, id) => {
-            acc[id] = true;
-            return acc;
-        }, {} as Record<string, boolean>);
         batch.update(coachDocRef, { contributingAgentIds: newAgentIdsMap });
-    
-        const agentsToAddCoach = [...newAgentIds].filter(id => !oldAgentIds.has(id));
-        agentsToAddCoach.forEach(agentId => {
-            const agentDocRef = doc(db, 'users', agentId);
-            batch.update(agentDocRef, { coachId: coachId });
-        });
-    
-        const agentsToRemoveCoach = [...oldAgentIds].filter(id => !newAgentIds.has(id));
-        agentsToRemoveCoach.forEach(agentId => {
-            const agentDocRef = doc(db, 'users', agentId);
-            batch.update(agentDocRef, { coachId: deleteField() });
-        });
-        
-        await batch.commit();
+        [...newAgentIdsSet].filter(id => !oldAgentIds.has(id)).forEach(agentId => batch.update(doc(db, 'users', agentId), { coachId: coachId }));
+        [...oldAgentIds].filter(id => !newAgentIdsSet.has(id)).forEach(agentId => batch.update(doc(db, 'users', agentId), { coachId: deleteField() }));
     }, []);
 
     const updateUserCoachAssignment = useCallback(async (agentId: string, newCoachId: string | null) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
-    
-        const agentDocRef = doc(db, 'users', agentId);
-        const agentDoc = await getDoc(agentDocRef);
-        if (!agentDoc.exists()) throw new Error("Agent not found.");
-        const currentAgentData = processUserDoc(agentDoc);
-        const oldCoachId = currentAgentData.coachId;
-    
+        if (!user || !userData || !db) throw new Error("Auth error.");
         const batch = writeBatch(db);
-        
-        // Update the agent's coachId
-        batch.update(agentDocRef, { coachId: newCoachId || deleteField() });
-    
+        batch.update(doc(db, 'users', agentId), { coachId: newCoachId || deleteField() });
         await batch.commit();
     }, [user, userData]);
 
     const updateUserTeamAffiliation = useCallback(async (agentId: string, newTeamId: string | null) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
-        
+        if (!user || !userData || !db) throw new Error("Auth error.");
         const agentDocRef = doc(db, 'users', agentId);
         const agentDoc = await getDoc(agentDocRef);
         if (!agentDoc.exists()) throw new Error("Agent not found.");
         const currentAgentData = processUserDoc(agentDoc);
         const oldTeamId = currentAgentData.teamId;
-
         const batch = writeBatch(db);
-
         batch.update(agentDocRef, { teamId: newTeamId || deleteField() });
-
-        if (oldTeamId && oldTeamId !== newTeamId) {
-            const oldTeamRef = doc(db, 'teams', oldTeamId);
-            batch.update(oldTeamRef, { memberIds: arrayRemove(agentId) });
-        }
-
-        if (newTeamId && oldTeamId !== newTeamId) {
-            const newTeamRef = doc(db, 'teams', newTeamId);
-            batch.update(newTeamRef, { memberIds: arrayUnion(agentId) });
-        }
-
+        if (oldTeamId && oldTeamId !== newTeamId) batch.update(doc(db, 'teams', oldTeamId), { memberIds: arrayRemove(agentId) });
+        if (newTeamId && oldTeamId !== newTeamId) batch.update(doc(db, 'teams', newTeamId), { memberIds: arrayUnion(agentId) });
         await batch.commit();
     }, [user, userData]);
 
@@ -899,11 +771,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const saveBudgetModel = useCallback(async (data: BudgetModelInputs) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !userData || !db) throw new Error("Auth error.");
+        // Add scoping fields for rules
         await setDoc(doc(db, 'budgetModels', user.uid), { 
             ...data, 
-            userId: user.uid,
-            marketCenterId: userData.marketCenterId || null 
+            userId: user.uid, 
+            marketCenterId: userData.marketCenterId || null,
+            teamId: userData.teamId || null,
+            coachId: userData.coachId || null 
         });
     }, [user, userData]);
     
@@ -931,9 +806,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!db) return;
         const q = query(collection(db, 'users'), where('email', '==', email));
         const snapshot = await getDocs(q);
-        if (snapshot.empty) throw new Error("User with that email not found.");
+        if (snapshot.empty) throw new Error("User not found.");
         const userToUpdate = snapshot.docs[0];
-        
         const batch = writeBatch(db);
         batch.update(userToUpdate.ref, { role: 'market_center_admin', marketCenterId });
         batch.update(doc(db, 'marketCenters', marketCenterId), { adminIds: arrayUnion(userToUpdate.id) });
@@ -951,14 +825,69 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updateUserMarketCenter = useCallback(async (marketCenterId: string | null) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         await updateDoc(doc(db, 'users', user.uid), { marketCenterId: marketCenterId || deleteField() });
     }, [user]);
+
+    const updateUserRole = useCallback(async (userId: string, role: TeamMember['role']) => {
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await updateDoc(doc(db, 'users', userId), { role });
+    }, []);
 
     const updateUserMarketCenterForAdmin = useCallback(async (userId: string, marketCenterId: string | null) => {
         const db = getFirestoreInstance();
         if (!db) return;
         await updateDoc(doc(db, 'users', userId), { marketCenterId: marketCenterId || deleteField() });
+    }, []);
+
+    const updateUserRoleAndMarketCenterAffiliation = useCallback(async (userId: string, newRole: TeamMember['role'], newMarketCenterId: string | null) => {
+        const db = getFirestoreInstance();
+        if (!db) throw new Error("Firebase is not configured.");
+
+        const userDocRef = doc(db, 'users', userId);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (!userDocSnap.exists()) {
+            throw new Error("User not found.");
+        }
+
+        const currentUserData = processUserDoc(userDocSnap);
+        const oldRole = currentUserData.role;
+        const oldMarketCenterId = currentUserData.marketCenterId;
+
+        const batch = writeBatch(db);
+
+        // 1. Update user document's role and marketCenterId
+        const userUpdates: Partial<TeamMember> = { role: newRole };
+        if (newMarketCenterId === null) {
+            userUpdates.marketCenterId = deleteField() as any; // Firestore deleteField
+        } else {
+            userUpdates.marketCenterId = newMarketCenterId;
+        }
+        batch.update(userDocRef, userUpdates);
+
+        // 2. Update market center adminIds array if necessary
+        const wasMcAdmin = oldRole === 'market_center_admin';
+        const isMcAdmin = newRole === 'market_center_admin';
+
+        // Remove user from old Market Center's adminIds if:
+        // - They were an MC Admin AND (no longer an MC Admin OR changed MCs)
+        if (wasMcAdmin && oldMarketCenterId && (!isMcAdmin || oldMarketCenterId !== newMarketCenterId)) {
+            batch.update(doc(db, 'marketCenters', oldMarketCenterId), {
+                adminIds: arrayRemove(userId)
+            });
+        }
+
+        // Add user to new Market Center's adminIds if:
+        // - They are now an MC Admin AND (were not before OR changed MCs)
+        if (isMcAdmin && newMarketCenterId && (!wasMcAdmin || oldMarketCenterId !== newMarketCenterId)) {
+            batch.update(doc(db, 'marketCenters', newMarketCenterId), {
+                adminIds: arrayUnion(userId)
+            });
+        }
+        
+        await batch.commit();
     }, []);
 
     const getAllTeams = useCallback(async (): Promise<Team[]> => {
@@ -975,10 +904,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return snapshot.docs.map(processTransactionDoc);
     }, []);
     
-    const updateUserRole = useCallback(async (userId: string, role: TeamMember['role']) => {
+    const updatePlaybookProgress = useCallback(async (playbookId: string, completedLessonIds: string[]) => {
         const db = getFirestoreInstance();
-        if (!db) return;
-        await updateDoc(doc(db, 'users', userId), { role });
+        if (!user || !db) throw new Error("Auth error.");
+        await updateDoc(doc(db, 'users', user.uid), { [`playbookProgress.${playbookId}`]: completedLessonIds });
+    }, [user]);
+
+    const updateOnboardingChecklistProgress = useCallback(async (completedItemIds: string[]) => {
+        const db = getFirestoreInstance();
+        if (!user || !db) throw new Error("Auth error.");
+        await updateDoc(doc(db, 'users', user.uid), { onboardingChecklistProgress: completedItemIds });
+    }, [user]);
+
+    const getPlaybooksForUser = useCallback(async (userId: string): Promise<Playbook[]> => {
+        const db = getFirestoreInstance();
+        if (!db) return [];
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        const userData = userDoc.exists() ? processUserDoc(userDoc) : null;
+        if (!userData) return [];
+        const playbooksRef = collection(db, 'playbooks');
+        const queriesToRun = [query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null))];
+        if (userData.teamId) queriesToRun.push(query(playbooksRef, where('teamId', '==', userData.teamId)));
+        if (userData.marketCenterId) queriesToRun.push(query(playbooksRef, where('marketCenterId', '==', userData.marketCenterId)));
+        const allPlaybooks = new Map<string, Playbook>();
+        for (const q of queriesToRun) {
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => { if (!allPlaybooks.has(doc.id)) allPlaybooks.set(doc.id, processPlaybookDoc(doc)); });
+        }
+        return Array.from(allPlaybooks.values());
     }, []);
 
     const getTransactionsForMarketCenter = useCallback(async (marketCenterId: string): Promise<Transaction[]> => {
@@ -993,24 +946,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const db = getFirestoreInstance();
         if (!userData || !db) return [];
         if (!P.isSuperAdmin(userData) && !userData.marketCenterId) return [];
-        if (agentIds.length === 0) return [];
         
+        // Optimization: If MC Admin, fetch all by MC ID first.
+        if (P.isMcAdmin(userData) && userData.marketCenterId) {
+             const q = query(
+                collection(db, 'commissionProfiles'), 
+                where('marketCenterId', '==', userData.marketCenterId)
+            );
+            const snapshot = await getDocs(q);
+            const allProfiles = snapshot.docs.map(processCommissionProfileDoc);
+            
+            // Optional: Filter in memory if specific agentIds were requested, though for reporting usually all are needed.
+            if (agentIds.length > 0) {
+                const agentIdSet = new Set(agentIds);
+                return allProfiles.filter(p => agentIdSet.has(p.id));
+            }
+            return allProfiles;
+        }
+
+        // Fallback logic for Super Admin or other roles requiring chunked lookup by ID
+        if (agentIds.length === 0) return [];
         const profiles: CommissionProfile[] = [];
         const collectionRef = collection(db, 'commissionProfiles');
 
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                let q;
-                if(P.isSuperAdmin(userData)) {
-                    q = query(collectionRef, where(documentId(), 'in', chunk));
-                } else {
-                    q = query(
-                        collectionRef, 
-                        where(documentId(), 'in', chunk),
-                        where('marketCenterId', '==', userData.marketCenterId)
-                    );
-                }
+                const q = query(collectionRef, where(documentId(), 'in', chunk));
                 const snapshot = await getDocs(q);
                 snapshot.forEach(doc => {
                     profiles.push(processCommissionProfileDoc(doc));
@@ -1033,15 +995,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!db) return [];
         const q = query(collection(db, 'candidates'), where('marketCenterId', '==', marketCenterId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
-                lastContacted: (data.lastContacted as Timestamp)?.toDate().toISOString(),
-            } as Candidate;
-        });
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: (doc.data().createdAt as Timestamp)?.toDate().toISOString(), lastContacted: (doc.data().lastContacted as Timestamp)?.toDate().toISOString() } as Candidate));
     }, []);
 
     const getCandidatesForRecruiter = useCallback(async (recruiterId: string): Promise<Candidate[]> => {
@@ -1049,25 +1003,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!db) return [];
         const q = query(collection(db, 'candidates'), where('recruiterId', '==', recruiterId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
-                lastContacted: (data.lastContacted as Timestamp)?.toDate().toISOString(),
-            } as Candidate;
-        });
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: (doc.data().createdAt as Timestamp)?.toDate().toISOString(), lastContacted: (doc.data().lastContacted as Timestamp)?.toDate().toISOString() } as Candidate));
     }, []);
 
     const addCandidate = useCallback(async (data: Omit<Candidate, 'id' | 'createdAt' | 'lastContacted'>) => {
         const db = getFirestoreInstance();
-        if (!db) throw new Error("Firebase not configured.");
-        const docRef = await addDoc(collection(db, 'candidates'), {
-            ...data,
-            createdAt: serverTimestamp(),
-            lastContacted: serverTimestamp(),
-        });
+        if (!db) throw new Error("Config error.");
+        const docRef = await addDoc(collection(db, 'candidates'), { ...data, createdAt: serverTimestamp(), lastContacted: serverTimestamp() });
         return docRef.id;
     }, []);
 
@@ -1075,10 +1017,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const db = getFirestoreInstance();
         if (!db) return;
         const { id: candidateId, ...updates } = data;
-        await updateDoc(doc(db, 'candidates', id), {
-            ...updates,
-            lastContacted: serverTimestamp(),
-        });
+        await updateDoc(doc(db, 'candidates', id), { ...updates, lastContacted: serverTimestamp() });
     }, []);
 
     const deleteCandidate = useCallback(async (id: string) => {
@@ -1092,26 +1031,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!db) return [];
         const q = query(collection(db, 'candidateActivities'), where('candidateId', '==', candidateId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
-            } as CandidateActivity;
-        });
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: (doc.data().createdAt as Timestamp)?.toDate().toISOString() } as CandidateActivity));
     }, []);
 
     const addCandidateActivity = useCallback(async (candidateId: string, note: string) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
-        await addDoc(collection(db, 'candidateActivities'), {
-            candidateId,
-            note,
-            userId: user.uid,
-            userName: userData.name,
-            createdAt: serverTimestamp(),
-        });
+        if (!user || !userData || !db) throw new Error("Auth error.");
+        await addDoc(collection(db, 'candidateActivities'), { candidateId, note, userId: user.uid, userName: userData.name, createdAt: serverTimestamp() });
     }, [user, userData]);
 
     const getOrgBlueprintForUser = useCallback(async (userId: string): Promise<OrgBlueprint | null> => {
@@ -1122,86 +1048,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return docSnap.exists() ? docSnap.data() as OrgBlueprint : null;
     }, []);
 
-    const updatePlaybookProgress = useCallback(async (playbookId: string, completedLessonIds: string[]) => {
-        const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
-        await updateDoc(doc(db, 'users', user.uid), {
-            [`playbookProgress.${playbookId}`]: completedLessonIds
-        });
-    }, [user]);
-
-    const updateOnboardingChecklistProgress = useCallback(async (completedItemIds: string[]) => {
-        const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
-        await updateDoc(doc(db, 'users', user.uid), {
-            onboardingChecklistProgress: completedItemIds
-        });
-    }, [user]);
-
-    const getPlaybooksForUser = useCallback(async (userId: string): Promise<Playbook[]> => {
-        const db = getFirestoreInstance();
-        if (!db) return [];
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        const userData = userDoc.exists() ? processUserDoc(userDoc) : null;
-        if (!userData) return [];
-    
-        const playbooksRef = collection(db, 'playbooks');
-        const queriesToRun = [
-            query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null)), // Global playbooks
-        ];
-        if (userData.teamId) {
-            queriesToRun.push(query(playbooksRef, where('teamId', '==', userData.teamId))); // Team-specific playbooks
-        }
-        if (userData.marketCenterId) {
-            queriesToRun.push(query(playbooksRef, where('marketCenterId', '==', userData.marketCenterId))); // MC-specific playbooks
-        }
-    
-        const allPlaybooks = new Map<string, Playbook>();
-        for (const q of queriesToRun) {
-            const snapshot = await getDocs(q);
-            snapshot.forEach(doc => {
-                if (!allPlaybooks.has(doc.id)) {
-                    allPlaybooks.set(doc.id, processPlaybookDoc(doc));
-                }
-            });
-        }
-        return Array.from(allPlaybooks.values());
-    }, []);
-
-    // --- New Client Lead Pipeline Methods ---
+    // --- Client Lead Methods ---
     const addClientLead = useCallback(async (data: Omit<ClientLead, 'id' | 'createdAt' | 'lastContacted'>) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !userData || !db) throw new Error("Auth error.");
         const docRef = await addDoc(collection(db, 'clientLeads'), {
-            ...data,
-            createdAt: serverTimestamp(),
-            lastContacted: serverTimestamp(),
-            ownerId: user.uid,
-            teamId: userData.teamId || null,
-            marketCenterId: userData.marketCenterId || null,
+            ...data, createdAt: serverTimestamp(), lastContacted: serverTimestamp(), ownerId: user.uid, teamId: userData.teamId || null, marketCenterId: userData.marketCenterId || null,
         });
         return docRef.id;
     }, [user, userData]);
 
     const updateClientLead = useCallback(async (id: string, data: Partial<ClientLead>) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         const { id: clientLeadId, ...updates } = data;
-        await updateDoc(doc(db, 'clientLeads', id), {
-            ...updates,
-            lastContacted: serverTimestamp(),
-        });
+        await updateDoc(doc(db, 'clientLeads', id), { ...updates, lastContacted: serverTimestamp() });
     }, [user]);
 
     const deleteClientLead = useCallback(async (id: string) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         await deleteDoc(doc(db, 'clientLeads', id));
     }, [user]);
 
     const getClientLeadsForUser = useCallback(async (userId: string): Promise<ClientLead[]> => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         const q = query(collection(db, 'clientLeads'), where('ownerId', '==', userId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processClientLeadDoc);
@@ -1209,7 +1081,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const getClientLeadsForTeam = useCallback(async (teamId: string): Promise<ClientLead[]> => {
         const db = getFirestoreInstance();
-        if (!user || !teamId || !db) throw new Error("User not authenticated, team ID missing, or Firebase not configured.");
+        if (!user || !teamId || !db) throw new Error("Auth error.");
         const q = query(collection(db, 'clientLeads'), where('teamId', '==', teamId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processClientLeadDoc);
@@ -1217,7 +1089,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const getClientLeadActivities = useCallback(async (clientLeadId: string): Promise<ClientLeadActivity[]> => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         const q = query(collection(db, 'clientLeadActivities'), where('clientLeadId', '==', clientLeadId), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processClientLeadActivityDoc);
@@ -1225,21 +1097,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const addClientLeadActivity = useCallback(async (clientLeadId: string, note: string) => {
         const db = getFirestoreInstance();
-        if (!user || !userData || !db) throw new Error("User not authenticated or Firebase not configured.");
-        await addDoc(collection(db, 'clientLeadActivities'), {
-            clientLeadId,
-            note,
-            userId: user.uid,
-            userName: userData.name,
-            createdAt: serverTimestamp(),
-        });
+        if (!user || !userData || !db) throw new Error("Auth error.");
+        await addDoc(collection(db, 'clientLeadActivities'), { clientLeadId, note, userId: user.uid, userName: userData.name, createdAt: serverTimestamp() });
     }, [user, userData]);
-    // --- End New Client Lead Pipeline Methods ---
 
-    // --- Zapier Integration Methods ---
+    // --- Zapier ---
     const regenerateZapierApiKey = useCallback(async (): Promise<string> => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         const newKey = crypto.randomUUID();
         await updateDoc(doc(db, 'users', user.uid), { zapierApiKey: newKey });
         return newKey;
@@ -1250,86 +1115,79 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!user || !db) return {};
         const snapshot = await getDocs(collection(db, `users/${user.uid}/webhooks`));
         const webhooks: Record<string, string> = {};
-        snapshot.forEach(doc => {
-            webhooks[doc.id] = doc.data().url;
-        });
+        snapshot.forEach(doc => { webhooks[doc.id] = doc.data().url; });
         return webhooks;
     }, [user]);
 
     const saveWebhook = useCallback(async (event: string, url: string) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         await setDoc(doc(db, `users/${user.uid}/webhooks`, event), { url });
     }, [user]);
 
     const deleteWebhook = useCallback(async (event: string) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         await deleteDoc(doc(db, `users/${user.uid}/webhooks`, event));
     }, [user]);
-    // --- End Zapier Integration Methods ---
 
-    // --- New Todo List Methods ---
+    // --- Todo List ---
     const addTodo = useCallback(async (data: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt' | 'isCompleted'>>) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
+        
+        // Sanitize data to remove any potential 'undefined' values which cause Firestore addDoc to fail
+        const safeData: any = { ...data };
+        Object.keys(safeData).forEach(key => {
+            if (safeData[key] === undefined) {
+                delete safeData[key];
+            }
+        });
 
-        const dataToSave: any = {
-            ...data,
-            userId: user.uid,
-            isCompleted: false,
-            createdAt: serverTimestamp(),
-            order: data.order || Date.now(),
-            text: data.text || 'New Task',
-            dueDate: data.dueDate || null,
-            priority: data.priority || 'Medium',
+        const dataToSave: any = { 
+            ...safeData, 
+            userId: user.uid, 
+            isCompleted: false, 
+            createdAt: serverTimestamp(), 
+            order: data.order || Date.now(), 
+            text: data.text || 'New Task', 
+            dueDate: data.dueDate || null, 
+            priority: data.priority || 'Medium' 
         };
-
-        // If a lead/candidate is linked, fetch its name
-        if (data.clientLeadId) {
-            const leadDoc = await getDoc(doc(db, 'clientLeads', data.clientLeadId));
-            if (leadDoc.exists()) {
-                dataToSave.clientLeadName = leadDoc.data().name;
-            }
+        
+        if (data.clientLeadId) { 
+            try {
+                const leadDoc = await getDoc(doc(db, 'clientLeads', data.clientLeadId)); 
+                if (leadDoc.exists()) dataToSave.clientLeadName = leadDoc.data().name;
+            } catch(e) { console.warn("Could not fetch client lead name for todo"); }
         } else if (data.candidateId) {
-            const candidateDoc = await getDoc(doc(db, 'candidates', data.candidateId));
-            if (candidateDoc.exists()) {
-                dataToSave.candidateName = candidateDoc.data().name;
-            }
+            try {
+                const candidateDoc = await getDoc(doc(db, 'candidates', data.candidateId)); 
+                if (candidateDoc.exists()) dataToSave.candidateName = candidateDoc.data().name;
+            } catch(e) { console.warn("Could not fetch candidate name for todo"); }
         }
-
+        
         await addDoc(collection(db, 'todos'), dataToSave);
     }, [user]);
 
     const updateTodo = useCallback(async (todoId: string, updates: Partial<Omit<TodoItem, 'id' | 'userId' | 'createdAt'>>) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
-        const todoDocRef = doc(db, 'todos', todoId);
-        
+        if (!user || !db) throw new Error("Auth error.");
         const updatesWithTimestamp: any = { ...updates };
-        if (updates.dueDate === '') { // Allow setting due date to null
-            updatesWithTimestamp.dueDate = null;
-        }
-
-        await updateDoc(todoDocRef, updatesWithTimestamp);
+        if (updates.dueDate === '') updatesWithTimestamp.dueDate = null;
+        await updateDoc(doc(db, 'todos', todoId), updatesWithTimestamp);
     }, [user]);
 
     const deleteTodo = useCallback(async (todoId: string) => {
         const db = getFirestoreInstance();
-        if (!user || !db) throw new Error("User not authenticated or Firebase not configured.");
+        if (!user || !db) throw new Error("Auth error.");
         await deleteDoc(doc(db, 'todos', todoId));
     }, [user]);
 
     const getTodosForUserDateRange = useCallback(async (startDate: string, endDate: string): Promise<TodoItem[]> => {
         const db = getFirestoreInstance();
         if (!user || !db) return [];
-        const q = query(
-            collection(db, 'todos'),
-            where('userId', '==', user.uid),
-            where('dueDate', '>=', startDate),
-            where('dueDate', '<=', endDate),
-            orderBy('dueDate', 'asc') // Simplified to use single orderBy for date range
-        );
+        const q = query(collection(db, 'todos'), where('userId', '==', user.uid), where('dueDate', '>=', startDate), where('dueDate', '<=', endDate), orderBy('dueDate', 'asc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processTodoItemDoc);
     }, [user]);
@@ -1337,41 +1195,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getUndatedTodosForUser = useCallback(async (): Promise<TodoItem[]> => {
         const db = getFirestoreInstance();
         if (!user || !db) return [];
-        const q = query(
-            collection(db, 'todos'),
-            where('userId', '==', user.uid),
-            where('dueDate', '==', null)
-            // Removed orderBy('createdAt', 'desc') to simplify indexing
-        );
+        const q = query(collection(db, 'todos'), where('userId', '==', user.uid), where('dueDate', '==', null));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(processTodoItemDoc);
     }, [user]);
 
     const getLinkableContacts = useCallback(async (): Promise<{ leads: ClientLead[], candidates: Candidate[] }> => {
         if (!user || !userData) return { leads: [], candidates: [] };
-        
         let leads: ClientLead[] = [];
         let candidates: Candidate[] = [];
-        
-        // Get client leads
-        if (P.isTeamLeader(userData) && userData.teamId) {
-            leads = await getClientLeadsForTeam(userData.teamId);
-        } else {
-            leads = await getClientLeadsForUser(user.uid);
-        }
-    
-        // Get recruitment candidates
+        if (P.isTeamLeader(userData) && userData.teamId) leads = await getClientLeadsForTeam(userData.teamId);
+        else leads = await getClientLeadsForUser(user.uid);
         if (P.isRecruiter(userData) || P.isCoach(userData) || P.isMcAdmin(userData) || P.isSuperAdmin(userData)) {
-            if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                candidates = await getCandidatesForMarketCenter(userData.marketCenterId);
-            } else if (P.isRecruiter(userData)) {
-                candidates = await getCandidatesForRecruiter(user.uid);
-            }
+            if (P.isMcAdmin(userData) && userData.marketCenterId) candidates = await getCandidatesForMarketCenter(userData.marketCenterId);
+            else if (P.isRecruiter(userData)) candidates = await getCandidatesForRecruiter(user.uid);
         }
-    
         return { leads, candidates };
     }, [user, userData, getClientLeadsForTeam, getClientLeadsForUser, getCandidatesForMarketCenter, getCandidatesForRecruiter]);
-    // --- End Todo List Methods ---
 
     const value = useMemo(() => ({
         user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, signInWithEmail, logout,
@@ -1382,16 +1222,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         saveCommissionProfile, getAllTransactions, getTransactionsForUser, getAllCommissionProfiles, addPerformanceLog,
         getPerformanceLogsForAgent, getPerformanceLogsForCurrentUser, getPerformanceLogsForManagedUsers, updatePerformanceLog, updateContributingAgents,
         updateCoachRoster, updateUserCoachAssignment, updateUserTeamAffiliation, getBudgetModelForUser, saveBudgetModel, getMarketCenters, createMarketCenter, deleteMarketCenter, assignMcAdmin,
-        removeMcAdmin, updateUserMarketCenter, updateUserMarketCenterForAdmin, getAllTeams, getAllTransactionsForAdmin, updateUserRole,
+        removeMcAdmin, updateUserMarketCenter, updateUserMarketCenterForAdmin, updateUserRole, updateUserRoleAndMarketCenterAffiliation, getAllTeams, getAllTransactionsForAdmin,
         updatePlaybookProgress, updateOnboardingChecklistProgress, getOrgBlueprintForUser, getPlaybooksForUser,
         getTransactionsForMarketCenter, getCommissionProfilesForMarketCenter, getBudgetModelsForMarketCenter, getCandidatesForMarketCenter,
         getCandidatesForRecruiter,
         addCandidate, updateCandidate, deleteCandidate, getCandidateActivities, addCandidateActivity,
-        
         addClientLead, updateClientLead, deleteClientLead, getClientLeadsForUser, getClientLeadsForTeam, getClientLeadActivities, addClientLeadActivity,
-
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
-
         addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts
     }), [
         user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, signInWithEmail, logout,
@@ -1402,16 +1239,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         saveCommissionProfile, getAllTransactions, getTransactionsForUser, getAllCommissionProfiles, addPerformanceLog,
         getPerformanceLogsForAgent, getPerformanceLogsForCurrentUser, getPerformanceLogsForManagedUsers, updatePerformanceLog, updateContributingAgents,
         updateCoachRoster, updateUserCoachAssignment, updateUserTeamAffiliation, getBudgetModelForUser, saveBudgetModel, getMarketCenters, createMarketCenter, deleteMarketCenter, assignMcAdmin,
-        removeMcAdmin, updateUserMarketCenter, updateUserMarketCenterForAdmin, getAllTeams, getAllTransactionsForAdmin, updateUserRole,
+        removeMcAdmin, updateUserMarketCenter, updateUserMarketCenterForAdmin, updateUserRole, updateUserRoleAndMarketCenterAffiliation, getAllTeams, getAllTransactionsForAdmin,
         updatePlaybookProgress, updateOnboardingChecklistProgress, getOrgBlueprintForUser, getPlaybooksForUser,
         getTransactionsForMarketCenter, getCommissionProfilesForMarketCenter, getBudgetModelsForMarketCenter, getCandidatesForMarketCenter,
         getCandidatesForRecruiter,
         addCandidate, updateCandidate, deleteCandidate, getCandidateActivities, addCandidateActivity,
-        
         addClientLead, updateClientLead, deleteClientLead, getClientLeadsForUser, getClientLeadsForTeam, getClientLeadActivities, addClientLeadActivity,
-
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
-
         addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts
     ]);
 

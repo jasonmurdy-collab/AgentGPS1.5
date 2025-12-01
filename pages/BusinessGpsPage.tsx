@@ -241,16 +241,20 @@ const BusinessGpsPage: React.FC = () => {
     }, [user]);
 
     const handleSave = useCallback(async () => {
-        if (!user) return;
+        if (!user || !userData) return;
         setSaving(true);
         const docRef = doc(getFirestoreInstance(), 'businessGps', user.uid);
+        // Add scoping fields so managers can read this doc via rules
         await setDoc(docRef, {
             userId: user.uid,
             gpsData,
             economicModelData,
+            teamId: userData.teamId || null,
+            marketCenterId: userData.marketCenterId || null,
+            coachId: userData.coachId || null,
         }, { merge: true });
         setSaving(false);
-    }, [user, gpsData, economicModelData]);
+    }, [user, userData, gpsData, economicModelData]);
 
     // --- GPS Form Handlers ---
     const handleGpsGoalChange = useCallback((field: 'focusArea' | 'targetGoal', value: string) => { setGpsData(prev => ({ ...prev, gpsGoal: { ...prev.gpsGoal, [field]: value } })); }, []);

@@ -4,27 +4,33 @@ import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth, P } from '../contexts/AuthContext';
 import type { TeamMember, Team, MarketCenter } from '../types';
-import { User, Briefcase, Building, Target, Search, Edit, ArrowLeft, X, UserPlus } from 'lucide-react';
+import { User, Briefcase, Building, Target, Search, Edit, ArrowLeft, X, UserPlus, Shield } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { EditUserModal } from '../components/admin/EditUserModal'; // Using EditUserModal instead of ChangeRoleModal
 
 const UserRow: React.FC<{
     user: TeamMember;
     teams: Map<string, string>;
+    marketCenters: Map<string, MarketCenter>; // Added for displaying MC name
     coaches: TeamMember[];
     onAssignCoach: (agent: TeamMember) => void;
     onAssignTeam: (agent: TeamMember) => void;
-    // New prop for conditional rendering
+    onChangeRole: (agent: TeamMember) => void;
     isMobile?: boolean; 
-}> = ({ user, teams, coaches, onAssignCoach, onAssignTeam, isMobile = false }) => {
-    const formatRole = (role: TeamMember['role']) => {
+}> = ({ user, teams, coaches, marketCenters, onAssignCoach, onAssignTeam, onChangeRole, isMobile = false }) => {
+    const formatRole = (role: TeamMember['role'], isSuperAdmin?: boolean) => {
+        if (isSuperAdmin) return 'Super Admin';
         if (role === 'team_leader') return 'Team Leader';
         if (role === 'productivity_coach') return 'Productivity Coach';
         if (role === 'recruiter') return 'Recruiter';
+        if (role === 'market_center_admin') return 'MC Admin';
         return 'Agent';
     };
 
     const currentTeamName = user.teamId ? teams.get(user.teamId) || 'N/A' : 'Not Assigned';
     const currentCoachName = user.coachId ? coaches.find(c => c.id === user.coachId)?.name || 'N/A' : 'Not Assigned';
+    const currentMcName = user.marketCenterId ? marketCenters.get(user.marketCenterId)?.name || 'N/A' : 'N/A';
+
 
     if (isMobile) {
         return (
@@ -32,6 +38,13 @@ const UserRow: React.FC<{
                 <div className="flex items-center justify-between mb-2">
                     <p className="font-bold text-lg text-text-primary">{user.name}</p>
                     <div className="flex items-center gap-2">
+                         <button
+                            onClick={() => onChangeRole(user)}
+                            className="p-2 text-purple-600 hover:bg-purple-100 rounded-full"
+                            title="Change Role"
+                        >
+                            <Shield size={16} />
+                        </button>
                         <button
                             onClick={() => onAssignTeam(user)}
                             className="p-2 text-primary hover:bg-primary/10 rounded-full"
@@ -50,7 +63,8 @@ const UserRow: React.FC<{
                 </div>
                 <p className="text-sm text-text-secondary">{user.email}</p>
                 <div className="mt-2 text-sm">
-                    <p><strong>Role:</strong> {formatRole(user.role)}</p>
+                    <p><strong>Role:</strong> {formatRole(user.role, user.isSuperAdmin)}</p>
+                    <p><strong>Market Center:</strong> {currentMcName}</p>
                     <p><strong>Team:</strong> {currentTeamName}</p>
                     <p><strong>Coach:</strong> {currentCoachName}</p>
                 </div>
@@ -62,10 +76,18 @@ const UserRow: React.FC<{
         <tr className="border-t border-border">
             <td className="p-3 font-semibold">{user.name}</td>
             <td className="p-3 text-text-secondary">{user.email}</td>
-            <td className="p-3 text-text-secondary">{formatRole(user.role)}</td>
+            <td className="p-3 text-text-secondary">{formatRole(user.role, user.isSuperAdmin)}</td>
+            <td className="p-3 text-text-secondary">{currentMcName}</td>
             <td className="p-3 text-text-secondary">{currentTeamName}</td>
             <td className="p-3 text-text-secondary">{currentCoachName}</td>
             <td className="p-3 flex items-center gap-2">
+                <button
+                    onClick={() => onChangeRole(user)}
+                    className="p-2 text-purple-600 hover:bg-purple-100 rounded-full"
+                    title="Change Role"
+                >
+                    <Shield size={16} />
+                </button>
                 <button
                     onClick={() => onAssignTeam(user)}
                     className="p-2 text-primary hover:bg-primary/10 rounded-full"
@@ -225,11 +247,11 @@ const AssignCoachModal: React.FC<AssignCoachModalProps> = ({ isOpen, onClose, ag
 
 
 const AgentAssignmentPage: React.FC = () => {
-    // Fix: Updated useAuth destructuring to import the new functions for coach and team assignments.
-    const { userData, getUsersForMarketCenter, getAllTeams, updateUserCoachAssignment, updateUserTeamAffiliation } = useAuth();
+    const { userData, getUsersForMarketCenter, getAllTeams, getMarketCenters, updateUserCoachAssignment, updateUserTeamAffiliation, updateUserRoleAndMarketCenterAffiliation } = useAuth();
     const [mcAgents, setMcAgents] = useState<TeamMember[]>([]);
     const [allCoaches, setAllCoaches] = useState<TeamMember[]>([]);
     const [allTeams, setAllTeams] = useState<Team[]>([]);
+    const [allMarketCenters, setAllMarketCenters] = useState<MarketCenter[]>([]); // New state for all market centers
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -240,6 +262,7 @@ const AgentAssignmentPage: React.FC = () => {
 
     const [isAssignTeamModalOpen, setIsAssignTeamModalOpen] = useState(false);
     const [isAssignCoachModalOpen, setIsAssignCoachModalOpen] = useState(false);
+    const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false); // Changed from isChangeRoleModalOpen
     const [selectedAgent, setSelectedAgent] = useState<TeamMember | null>(null);
 
     const currentMarketCenterId = userData?.marketCenterId;
@@ -254,15 +277,19 @@ const AgentAssignmentPage: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const [usersInMc, allTeamsData] = await Promise.all([
+            const [usersInMc, allTeamsData, allMcData] = await Promise.all([
                 getUsersForMarketCenter(currentMarketCenterId),
                 getAllTeams(),
+                getMarketCenters(), // Fetch all market centers
             ]);
 
+            // Agents only, excluding self
             const agentsOnly = usersInMc.filter(u => u.id !== userData?.id);
             setMcAgents(agentsOnly);
             setAllTeams(allTeamsData);
+            setAllMarketCenters(allMcData); // Set all market centers
 
+            // Filter for potential coaches (coaches, team leaders, or super admins in this MC)
             const coachesInMc = usersInMc.filter(u => P.isCoach(u) || P.isTeamLeader(u) || P.isSuperAdmin(u));
             setAllCoaches(coachesInMc);
 
@@ -272,7 +299,7 @@ const AgentAssignmentPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentMarketCenterId, userData, getUsersForMarketCenter, getAllTeams]);
+    }, [currentMarketCenterId, userData, getUsersForMarketCenter, getAllTeams, getMarketCenters]);
 
     useEffect(() => {
         fetchData();
@@ -287,6 +314,11 @@ const AgentAssignmentPage: React.FC = () => {
         setSelectedAgent(agent);
         setIsAssignTeamModalOpen(true);
     };
+    
+    const handleChangeRoleClick = (agent: TeamMember) => {
+        setSelectedAgent(agent);
+        setIsEditUserModalOpen(true); // Changed to open EditUserModal
+    };
 
     const handleSaveCoachAssignment = async (agentId: string, newCoachId: string | null) => {
         await updateUserCoachAssignment(agentId, newCoachId);
@@ -296,6 +328,13 @@ const AgentAssignmentPage: React.FC = () => {
     const handleSaveTeamAssignment = async (agentId: string, newTeamId: string | null) => {
         await updateUserTeamAffiliation(agentId, newTeamId);
         fetchData(); // Re-fetch to update the table
+    };
+
+    const handleSaveUserChanges = async (updates: { newRole: TeamMember['role'], newMarketCenterId: string | null }) => {
+        if (selectedAgent) {
+            await updateUserRoleAndMarketCenterAffiliation(selectedAgent.id, updates.newRole, updates.newMarketCenterId);
+            await fetchData(); // Re-fetch to show updated role immediately
+        }
     };
 
     const filteredAgents = useMemo(() => {
@@ -322,7 +361,7 @@ const AgentAssignmentPage: React.FC = () => {
     }, [mcAgents, filterSearch, filterRole, filterTeamId, filterCoachId]);
 
     const teamOptionsMap = useMemo(() => new Map(allTeams.map(t => [t.id, t.name])), [allTeams]);
-    const coachOptionsMap = useMemo(() => new Map(allCoaches.map(c => [c.id, c.name])), [allCoaches]);
+    const marketCenterOptionsMap = useMemo(() => new Map(allMarketCenters.map(mc => [mc.id, mc])), [allMarketCenters]); // For UserRow display
 
     if (!P.isMcAdmin(userData) && !P.isSuperAdmin(userData)) {
         return (
@@ -407,9 +446,11 @@ const AgentAssignmentPage: React.FC = () => {
                                     key={agent.id}
                                     user={agent}
                                     teams={teamOptionsMap}
+                                    marketCenters={marketCenterOptionsMap}
                                     coaches={allCoaches}
                                     onAssignCoach={handleAssignCoachClick}
                                     onAssignTeam={handleAssignTeamClick}
+                                    onChangeRole={handleChangeRoleClick}
                                     isMobile={true}
                                 />
                             ))
@@ -424,6 +465,7 @@ const AgentAssignmentPage: React.FC = () => {
                                     <th className="p-3 font-semibold text-text-primary">Name</th>
                                     <th className="p-3 font-semibold text-text-primary">Email</th>
                                     <th className="p-3 font-semibold text-text-primary">Role</th>
+                                    <th className="p-3 font-semibold text-text-primary">Market Center</th>
                                     <th className="p-3 font-semibold text-text-primary">Team</th>
                                     <th className="p-3 font-semibold text-text-primary">Coach</th>
                                     <th className="p-3 font-semibold text-text-primary">Actions</th>
@@ -436,14 +478,16 @@ const AgentAssignmentPage: React.FC = () => {
                                             key={agent.id}
                                             user={agent}
                                             teams={teamOptionsMap}
+                                            marketCenters={marketCenterOptionsMap}
                                             coaches={allCoaches}
                                             onAssignCoach={handleAssignCoachClick}
                                             onAssignTeam={handleAssignTeamClick}
+                                            onChangeRole={handleChangeRoleClick}
                                         />
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={6} className="text-center text-text-secondary py-8">No agents found matching your filters.</td>
+                                        <td colSpan={7} className="text-center text-text-secondary py-8">No agents found matching your filters.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -452,7 +496,7 @@ const AgentAssignmentPage: React.FC = () => {
                 </Card>
             </div>
 
-            {/* Modals are rendered here, outside the main div but within the component's return */}
+            {/* Modals */}
             <AssignTeamModal
                 isOpen={isAssignTeamModalOpen}
                 onClose={() => { setIsAssignTeamModalOpen(false); setSelectedAgent(null); }}
@@ -468,6 +512,16 @@ const AgentAssignmentPage: React.FC = () => {
                 allCoaches={allCoaches}
                 onSave={handleSaveCoachAssignment}
             />
+            
+            {selectedAgent && (
+                <EditUserModal // Changed from ChangeRoleModal
+                    isOpen={isEditUserModalOpen}
+                    onClose={() => { setIsEditUserModalOpen(false); setSelectedAgent(null); }}
+                    onSave={handleSaveUserChanges}
+                    agent={selectedAgent}
+                    marketCenters={allMarketCenters} // Pass all market centers to the modal
+                />
+            )}
         </div>
     );
 };

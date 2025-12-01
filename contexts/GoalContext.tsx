@@ -335,11 +335,11 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (P.isSuperAdmin(userData)) {
             q = query(goalsCollectionRef, where("userId", "==", userId));
         } else if (P.isMcAdmin(userData) && userData.marketCenterId === agentProfile.marketCenterId) {
-            q = query(goalsCollectionRef, where("userId", "==", userId));
+            q = query(goalsCollectionRef, where("userId", "==", userId), where("marketCenterId", "==", userData.marketCenterId));
         } else if (P.isCoach(userData) && agentProfile.coachId === user.uid) {
-            q = query(goalsCollectionRef, where("userId", "==", userId));
+            q = query(goalsCollectionRef, where("userId", "==", userId), where("coachId", "==", user.uid));
         } else if (P.isTeamLeader(userData) && userData.teamId === agentProfile.teamId) {
-            q = query(goalsCollectionRef, where("userId", "==", userId));
+            q = query(goalsCollectionRef, where("userId", "==", userId), where("teamId", "==", userData.teamId));
         } else {
             return []; // Not a manager of this agent, return empty array.
         }

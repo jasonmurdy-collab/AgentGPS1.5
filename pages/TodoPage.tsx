@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import type { TodoItem, Priority, ClientLead, Candidate } from '../types';
-// FIX: import X icon from lucide-react
 import { ListTodo, PlusCircle, CheckSquare, Square, Edit, Trash2, ChevronDown, Sparkles, User, Link as LinkIcon, GripVertical, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
@@ -183,6 +182,7 @@ const TodoModal: React.FC<TodoModalProps> = ({ isOpen, onClose, onSubmit, todoTo
 // --- TODO SECTION COMPONENT ---
 
 interface TodoSectionProps {
+    sectionId: string;
     title: string;
     todos: TodoItem[];
     onToggleComplete: (todo: TodoItem) => void;
@@ -195,7 +195,7 @@ interface TodoSectionProps {
     onDropOnItem: (e: DragEvent, dropIndex: number) => void;
 }
 
-const TodoSection: React.FC<TodoSectionProps> = React.memo(({ title, todos, onToggleComplete, onEdit, onDelete, onAddTask, onDropOnSection, onDragStart, onDragEnd, onDropOnItem }) => {
+const TodoSection: React.FC<TodoSectionProps> = React.memo(({ sectionId, title, todos, onToggleComplete, onEdit, onDelete, onAddTask, onDropOnSection, onDragStart, onDragEnd, onDropOnItem }) => {
     const [isAdding, setIsAdding] = useState(false);
     const [newItemText, setNewItemText] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -210,14 +210,16 @@ const TodoSection: React.FC<TodoSectionProps> = React.memo(({ title, todos, onTo
             setIsAdding(false);
             return;
         }
-        const date = ['Anytime', 'Overdue'].includes(title) ? null : title;
+        // Use sectionId (the raw key) to determine the date, NOT the display title.
+        // This ensures 'Today' (display title) maps back to 'YYYY-MM-DD' (sectionId).
+        const date = ['Anytime', 'Overdue'].includes(sectionId) ? null : sectionId;
         onAddTask(newItemText.trim(), date);
         setNewItemText('');
         // Keep input open for more quick adds
     };
     
     return (
-        <div onDrop={e => onDropOnSection(e, title)} onDragOver={e => e.preventDefault()}>
+        <div onDrop={e => onDropOnSection(e, sectionId)} onDragOver={e => e.preventDefault()}>
             <h2 className="font-bold text-lg flex items-center gap-2 p-2">{title}<span className="text-sm font-normal bg-background px-2 py-0.5 rounded-full">{todos.length}</span></h2>
             <Card className="p-0">
                 <div className="divide-y divide-border">
@@ -341,21 +343,16 @@ const TodoPage: React.FC = () => {
         setDraggedItem(todo);
     };
 
-    const handleDropOnSection = async (e: DragEvent, sectionTitle: string) => {
+    const handleDropOnSection = async (e: DragEvent, sectionId: string) => {
         if (!draggedItem || viewMode !== 'date') return;
         
         let newDueDate: string | null = null;
-        if (sectionTitle !== 'Anytime' && sectionTitle !== 'Overdue') {
-            const dateMap: Record<string, () => Date> = {
-                'Today': () => new Date(),
-                'Tomorrow': () => {
-                    const d = new Date();
-                    d.setDate(d.getDate() + 1);
-                    return d;
-                }
-            };
-            const dateFn = dateMap[sectionTitle];
-            newDueDate = dateFn ? formatDateForInput(dateFn()) : sectionTitle;
+        // Use sectionId directly as it contains raw date strings or 'Anytime'/'Overdue'
+        if (sectionId !== 'Anytime' && sectionId !== 'Overdue') {
+             // If sectionId is already a valid date string (e.g. '2023-10-27'), use it.
+             // But also handle if drop target logic sends 'Today' (though we fixed that in TodoSection)
+             // The TodoSection calls this with sectionId, so it should be correct.
+             newDueDate = sectionId;
         }
 
         if (draggedItem.dueDate !== newDueDate) {
@@ -396,7 +393,7 @@ const TodoPage: React.FC = () => {
         if (viewMode === 'priority') {
             const groups: Record<Priority, TodoItem[]> = { 'Urgent': [], 'High': [], 'Medium': [], 'Low': [] };
             for (const todo of allTodos) { groups[todo.priority]?.push(todo); }
-            return (Object.keys(groups) as Priority[]).sort((a,b) => priorityOrder[a] - priorityOrder[b]).map(p => ({ title: p, todos: groups[p].sort((a,b) => (a.isCompleted !== b.isCompleted) ? (a.isCompleted ? 1 : -1) : (a.dueDate ? new Date(a.dueDate).getTime() : Infinity) - (b.dueDate ? new Date(b.dueDate).getTime() : Infinity))})).filter(g => g.todos.length > 0);
+            return (Object.keys(groups) as Priority[]).sort((a,b) => priorityOrder[a] - priorityOrder[b]).map(p => ({ id: p, title: p, todos: groups[p].sort((a,b) => (a.isCompleted !== b.isCompleted) ? (a.isCompleted ? 1 : -1) : (a.dueDate ? new Date(a.dueDate).getTime() : Infinity) - (b.dueDate ? new Date(b.dueDate).getTime() : Infinity))})).filter(g => g.todos.length > 0);
         }
         
         const today = getStartOfDay(new Date());
@@ -409,15 +406,17 @@ const TodoPage: React.FC = () => {
             } else { groups['Anytime'].push(todo); }
         }
         
-        const sortedEntries = Object.entries(groups).map(([title, todos]) => ({ title, todos: todos.sort(sortFnByOrder) })).filter(g => g.todos.length > 0);
+        // Map to object with id (raw key) and title (display title) logic handled in render
+        const sortedEntries = Object.entries(groups).map(([id, todos]) => ({ id, title: id, todos: todos.sort(sortFnByOrder) })).filter(g => g.todos.length > 0);
+        
         const order = ['Overdue', formatDateForInput(today), formatDateForInput(new Date(today.getTime() + 86400000))];
         sortedEntries.sort((a, b) => {
-            const aIndex = order.indexOf(a.title);
-            const bIndex = order.indexOf(b.title);
-            if (a.title === 'Anytime') return 1; if (b.title === 'Anytime') return -1;
+            const aIndex = order.indexOf(a.id);
+            const bIndex = order.indexOf(b.id);
+            if (a.id === 'Anytime') return 1; if (b.id === 'Anytime') return -1;
             if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
             if (aIndex !== -1) return -1; if (bIndex !== -1) return 1;
-            return new Date(a.title).getTime() - new Date(b.title).getTime();
+            return new Date(a.id).getTime() - new Date(b.id).getTime();
         });
         return sortedEntries;
     }, [datedTodos, undatedTodos, viewMode]);
@@ -442,9 +441,10 @@ const TodoPage: React.FC = () => {
                 {loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
                     <div className="space-y-6">
                         {groupedTodos.length > 0 ? (
-                            groupedTodos.map(({ title, todos }) => (
+                            groupedTodos.map(({ id, title, todos }) => (
                                 <TodoSection
-                                    key={title}
+                                    key={id}
+                                    sectionId={id}
                                     title={viewMode === 'date' ? formatDisplayDate(title) : title}
                                     todos={todos}
                                     onToggleComplete={handleToggleComplete}

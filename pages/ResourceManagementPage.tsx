@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -10,6 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { generatePlaybookFromOutline, generateGoalSuggestions } from '../lib/gemini';
 import { createPortal } from 'react-dom';
 import { GoalModal } from '../components/goals/AddGoalModal';
+import { processPlaybookDoc } from '../lib/firestoreUtils';
 
 const PlaybookCard: React.FC<{ playbook: Playbook; onDelete: (id: string) => void }> = ({ playbook, onDelete }) => {
     const moduleCount = playbook.modules?.length || 0;
@@ -203,7 +205,7 @@ const NewAgentResourcesCard: React.FC<{
 
 const ResourceManagementPage: React.FC = () => {
     const navigate = useNavigate();
-    const { user, userData, getUserById, updateUserNewAgentStatus, getUsersByIds } = useAuth(); // getUsersByIds added
+    const { user, userData, getUserById, updateUserNewAgentStatus, getUsersByIds } = useAuth();
     const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
     const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
     const [managedAgents, setManagedAgents] = useState<({ id: string, name: string, isNewAgent?: boolean, assignedLearningPathId?: string, onboardingChecklistProgress?: string[] })[]>([]);
@@ -213,51 +215,73 @@ const ResourceManagementPage: React.FC = () => {
     const [goalModalInitialData, setGoalModalInitialData] = useState<Partial<NewAgentGoalTemplate>>({});
     const [targetAgentForGoal, setTargetAgentForGoal] = useState<string | null>(null);
 
-    // Filter playbooks and learning paths based on user's marketCenterId/teamId
-    const filterByScope = useCallback((items: (Playbook | LearningPath)[]) => {
-        if (userData?.isSuperAdmin) {
-            return items; // Super Admins see everything
-        }
-        return items.filter(item => {
-            const isGlobal = !item.marketCenterId && !item.teamId;
-            const isMcScoped = item.marketCenterId === userData?.marketCenterId && !item.teamId;
-            const isTeamScoped = item.teamId === userData?.teamId;
-            return isGlobal || isMcScoped || isTeamScoped;
-        });
-    }, [userData]);
-
-    const fetchResources = useCallback(() => {
-        if (!user || !userData) { setLoading(false); return () => {}; }
+    const fetchResources = useCallback(async () => {
+        if (!user || !userData) { setLoading(false); return; }
         setLoading(true);
         const db = getFirestoreInstance();
+        
+        try {
+            // Scoped Playbook Queries to prevent permission errors
+            const playbooksRef = collection(db, 'playbooks');
+            const pbQueries = [];
 
-        const playbooksQuery = collection(db, 'playbooks');
-        const pathsQuery = collection(db, 'learningPaths');
+            // 1. Global playbooks
+            pbQueries.push(query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null)));
 
-        const unsubscribePlaybooks = onSnapshot(playbooksQuery, (snapshot) => {
-            const fetchedPlaybooks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Playbook));
-            setPlaybooks(filterByScope(fetchedPlaybooks) as Playbook[]);
-            setLoading(false);
-        }, (error) => {
-            console.error("Error fetching playbooks:", error);
-            setLoading(false);
-        });
+            // 2. Creator playbooks (My playbooks)
+            pbQueries.push(query(playbooksRef, where('creatorId', '==', user.uid)));
 
-        const unsubscribeLearningPaths = onSnapshot(pathsQuery, (snapshot) => {
-            const fetchedPaths = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LearningPath));
-            setLearningPaths(filterByScope(fetchedPaths) as LearningPath[]);
-            setLoading(false);
-        }, (error) => {
-            console.error("Error fetching learning paths:", error);
-            setLoading(false);
-        });
+            // 3. Team playbooks
+            if (userData.teamId) {
+                pbQueries.push(query(playbooksRef, where('teamId', '==', userData.teamId)));
+            }
 
-        // Fetch managed agents for assigning resources
-        const fetchManagedAgents = async () => {
+            // 4. Market Center playbooks
+            if (userData.marketCenterId) {
+                pbQueries.push(query(playbooksRef, where('marketCenterId', '==', userData.marketCenterId)));
+            }
+
+            const playbookSnapshots = await Promise.all(pbQueries.map(q => getDocs(q)));
+            const allPlaybooks = new Map<string, Playbook>();
+            playbookSnapshots.forEach(snap => {
+                snap.docs.forEach(doc => {
+                    if (!allPlaybooks.has(doc.id)) {
+                         allPlaybooks.set(doc.id, processPlaybookDoc(doc));
+                    }
+                });
+            });
+            setPlaybooks(Array.from(allPlaybooks.values()));
+
+
+            // Scoped Learning Path Queries
+            const pathsRef = collection(db, 'learningPaths');
+            const pathQueries = [];
+            pathQueries.push(query(pathsRef, where('teamId', '==', null), where('marketCenterId', '==', null))); // Global
+            pathQueries.push(query(pathsRef, where('creatorId', '==', user.uid))); // Created by me
+
+             if (userData.teamId) {
+                pathQueries.push(query(pathsRef, where('teamId', '==', userData.teamId)));
+            }
+            if (userData.marketCenterId) {
+                pathQueries.push(query(pathsRef, where('marketCenterId', '==', userData.marketCenterId)));
+            }
+
+            const pathSnapshots = await Promise.all(pathQueries.map(q => getDocs(q)));
+            const allPaths = new Map<string, LearningPath>();
+            pathSnapshots.forEach(snap => {
+                 snap.docs.forEach(doc => {
+                    if(!allPaths.has(doc.id)) {
+                        allPaths.set(doc.id, { id: doc.id, ...doc.data() } as LearningPath);
+                    }
+                 });
+            });
+            setLearningPaths(Array.from(allPaths.values()));
+
+
+            // Fetch managed agents
             let agentsToManage: TeamMember[] = [];
             if (P.isSuperAdmin(userData)) {
-                // Fix: Correctly extract agent IDs from contributingAgentIds object keys
-                const contributingAgentIds = Object.keys(userData.contributingAgentIds || {});
+                 const contributingAgentIds = Object.keys(userData.contributingAgentIds || {});
                 if (contributingAgentIds.length > 0) {
                     agentsToManage = await getUsersByIds(contributingAgentIds);
                 }
@@ -271,14 +295,13 @@ const ResourceManagementPage: React.FC = () => {
                 agentsToManage = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamMember));
             }
             setManagedAgents(agentsToManage.filter(a => a.id !== user.uid));
-        };
-        fetchManagedAgents();
 
-        return () => {
-            unsubscribePlaybooks();
-            unsubscribeLearningPaths();
-        };
-    }, [user, userData, filterByScope, getUsersByIds]);
+        } catch (error) {
+            console.error("Error fetching resources:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [user, userData, getUsersByIds]);
 
     useEffect(() => {
         fetchResources();
@@ -322,6 +345,7 @@ const ResourceManagementPage: React.FC = () => {
     const handleDeletePlaybook = async (id: string) => {
         if (window.confirm("Are you sure you want to delete this playbook and all its lessons? This cannot be undone.")) {
             await deleteDoc(doc(getFirestoreInstance(), 'playbooks', id));
+            fetchResources(); // Refresh list
         }
     };
 
@@ -332,18 +356,19 @@ const ResourceManagementPage: React.FC = () => {
     const handleDeleteLearningPath = async (id: string) => {
         if (window.confirm("Are you sure you want to delete this learning path? This cannot be undone.")) {
             await deleteDoc(doc(getFirestoreInstance(), 'learningPaths', id));
+            fetchResources(); // Refresh list
         }
     };
 
     const handleAssignLearningPath = async (agentId: string, pathId: string | null) => {
         if (!user || !userData) return;
         await setDoc(doc(getFirestoreInstance(), 'users', agentId), { assignedLearningPathId: pathId }, { merge: true });
-        fetchResources(); // Re-fetch to update agent data
+        setManagedAgents(prev => prev.map(a => a.id === agentId ? { ...a, assignedLearningPathId: pathId || undefined } : a));
     };
 
     const handleToggleNewAgentStatus = async (agentId: string, currentStatus: boolean) => {
         await updateUserNewAgentStatus(agentId, currentStatus);
-        fetchResources(); // Re-fetch to update agent data
+        setManagedAgents(prev => prev.map(a => a.id === agentId ? { ...a, isNewAgent: currentStatus } : a));
     };
 
     const handleGenerateGoalSuggestions = async (agentId: string) => {

@@ -68,7 +68,7 @@ const UserMobileCard: React.FC<{
 };
 
 const UserManagementPage: React.FC = () => {
-    const { getAllUsers, getAllTeams, getMarketCenters, updateUserRole, updateUserMarketCenterForAdmin, userData: currentUserData } = useAuth();
+    const { getAllUsers, getAllTeams, getMarketCenters, updateUserRoleAndMarketCenterAffiliation, userData: currentUserData } = useAuth();
     const [users, setUsers] = useState<TeamMember[]>([]);
     const [teams, setTeams] = useState<Map<string, string>>(new Map());
     const [marketCenters, setMarketCenters] = useState<Map<string, MarketCenter>>(new Map());
@@ -129,39 +129,9 @@ const UserManagementPage: React.FC = () => {
     const handleSaveUser = async (updates: { newRole: TeamMember['role'], newMarketCenterId: string | null }) => {
         if (!userToEdit) return;
 
-        const { newRole, newMarketCenterId } = updates;
-        const oldRole = userToEdit.role;
-        const oldMarketCenterId = userToEdit.marketCenterId;
-
-        const promises = [];
-
-        // 1. Update user document
-        if (newRole !== oldRole) {
-            promises.push(updateUserRole(userToEdit.id, newRole));
-        }
-        if (newMarketCenterId !== oldMarketCenterId) {
-            promises.push(updateUserMarketCenterForAdmin(userToEdit.id, newMarketCenterId));
-        }
+        // Use the comprehensive function to update role AND handle MC adminIds array
+        await updateUserRoleAndMarketCenterAffiliation(userToEdit.id, updates.newRole, updates.newMarketCenterId);
         
-        // 2. Update market center adminIds array if necessary
-        const wasMcAdmin = oldRole === 'market_center_admin';
-        const isMcAdmin = newRole === 'market_center_admin';
-
-        // Becoming an admin for a (new) MC
-        if (isMcAdmin && newMarketCenterId && (!wasMcAdmin || oldMarketCenterId !== newMarketCenterId)) {
-            promises.push(updateDoc(doc(getFirestoreInstance(), 'marketCenters', newMarketCenterId), {
-                adminIds: arrayUnion(userToEdit.id)
-            }));
-        }
-
-        // No longer an admin for the old MC
-        if (wasMcAdmin && oldMarketCenterId && (!isMcAdmin || oldMarketCenterId !== newMarketCenterId)) {
-            promises.push(updateDoc(doc(getFirestoreInstance(), 'marketCenters', oldMarketCenterId), {
-                adminIds: arrayRemove(userToEdit.id)
-            }));
-        }
-        
-        await Promise.all(promises);
         fetchData(); // Refetch all data to ensure consistency
     };
 
