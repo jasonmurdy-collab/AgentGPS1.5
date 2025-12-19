@@ -1,14 +1,14 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import type { TeamMember, Team, MarketCenter } from '../types';
-import { Users as UsersIcon, Search, SlidersHorizontal, Edit } from 'lucide-react';
+import { Users as UsersIcon, Search, SlidersHorizontal, Edit, UserPlus, X } from 'lucide-react';
 import { EditUserModal } from '../components/admin/EditUserModal';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 // Fix: 'db' is not an exported member of '../firebaseConfig'. Replaced with 'getFirestoreInstance'.
 import { getFirestoreInstance } from '../firebaseConfig';
+import { createPortal } from 'react-dom';
 
 const formatRole = (role: TeamMember['role'], isSuperAdmin?: boolean) => {
     if (isSuperAdmin) return 'Super Admin';
@@ -67,11 +67,115 @@ const UserMobileCard: React.FC<{
     );
 };
 
+interface CreateUserModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: { name: string; email: string; password: string; role: TeamMember['role']; teamId: string | null; marketCenterId: string | null; }) => Promise<void>;
+    teams: Team[];
+    marketCenters: MarketCenter[];
+}
+
+const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSave, teams, marketCenters }) => {
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [role, setRole] = useState<TeamMember['role']>('agent');
+    const [teamId, setTeamId] = useState('');
+    const [marketCenterId, setMarketCenterId] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await onSave({ name, email, password, role, teamId: teamId || null, marketCenterId: marketCenterId || null });
+            onClose();
+            // Reset form fields
+            setName('');
+            setEmail('');
+            setPassword('');
+            setRole('agent');
+            setTeamId('');
+            setMarketCenterId('');
+        } catch (error: any) {
+            alert("Error creating user: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const inputClasses = "w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary text-sm";
+    const labelClasses = "block text-xs font-medium text-text-secondary mb-1";
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Create New User</h2>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-primary/5"><X size={20}/></button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className={labelClasses}>Full Name</label>
+                        <input type="text" required value={name} onChange={e => setName(e.target.value)} className={inputClasses} placeholder="John Doe"/>
+                    </div>
+                    <div>
+                        <label className={labelClasses}>Email</label>
+                        <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClasses} placeholder="john@example.com"/>
+                    </div>
+                    <div>
+                        <label className={labelClasses}>Temporary Password</label>
+                        <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClasses} placeholder="******"/>
+                    </div>
+                    <div>
+                        <label className={labelClasses}>Role</label>
+                        <select value={role} onChange={e => setRole(e.target.value as any)} className={inputClasses}>
+                            <option value="agent">Agent</option>
+                            <option value="team_leader">Team Leader</option>
+                            <option value="productivity_coach">Productivity Coach</option>
+                            <option value="recruiter">Recruiter</option>
+                            <option value="market_center_admin">MC Admin</option>
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClasses}>Market Center</label>
+                            <select value={marketCenterId} onChange={e => setMarketCenterId(e.target.value)} className={inputClasses}>
+                                <option value="">None</option>
+                                {marketCenters.map(mc => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelClasses}>Team</label>
+                            <select value={teamId} onChange={e => setTeamId(e.target.value)} className={inputClasses}>
+                                <option value="">None</option>
+                                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-text-secondary hover:bg-primary/5">Cancel</button>
+                        <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-primary text-on-accent font-semibold flex items-center justify-center min-w-[100px]">
+                            {loading ? <Spinner className="w-4 h-4"/> : 'Create User'}
+                        </button>
+                    </div>
+                </form>
+            </Card>
+        </div>,
+        document.body
+    );
+};
+
+
 const UserManagementPage: React.FC = () => {
-    const { getAllUsers, getAllTeams, getMarketCenters, updateUserRoleAndMarketCenterAffiliation, userData: currentUserData } = useAuth();
+    const { getAllUsers, getAllTeams, getMarketCenters, updateUserRoleAndMarketCenterAffiliation, createAccountForAgent, userData: currentUserData } = useAuth();
     const [users, setUsers] = useState<TeamMember[]>([]);
     const [teams, setTeams] = useState<Map<string, string>>(new Map());
+    const [allTeams, setAllTeams] = useState<Team[]>([]); // Keep raw array for modal
     const [marketCenters, setMarketCenters] = useState<Map<string, MarketCenter>>(new Map());
+    const [allMarketCenters, setAllMarketCenters] = useState<MarketCenter[]>([]); // Keep raw array for modal
     const [loading, setLoading] = useState(true);
     
     const [filters, setFilters] = useState({ role: 'all', mcId: 'all', teamId: 'all', search: '' });
@@ -81,6 +185,7 @@ const UserManagementPage: React.FC = () => {
     const [itemsPerPage, setItemsPerPage] = useState(25);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [userToEdit, setUserToEdit] = useState<TeamMember | null>(null);
 
     const fetchData = useCallback(async () => {
@@ -93,7 +198,9 @@ const UserManagementPage: React.FC = () => {
             ]);
             
             setUsers(usersData);
+            setAllTeams(teamsData);
             setTeams(new Map(teamsData.map(t => [t.id, t.name])));
+            setAllMarketCenters(mcData);
             setMarketCenters(new Map(mcData.map(mc => [mc.id, mc])));
 
         } catch (error) {
@@ -133,6 +240,11 @@ const UserManagementPage: React.FC = () => {
         await updateUserRoleAndMarketCenterAffiliation(userToEdit.id, updates.newRole, updates.newMarketCenterId);
         
         fetchData(); // Refetch all data to ensure consistency
+    };
+
+    const handleCreateUser = async (data: any) => {
+        await createAccountForAgent(data.email, data.password, data.name, data.role, data.teamId, data.marketCenterId);
+        fetchData();
     };
 
     const processedUsers = useMemo(() => {
@@ -198,11 +310,20 @@ const UserManagementPage: React.FC = () => {
     return (
         <div className="h-full flex flex-col">
             <header className="p-4 sm:p-6 lg:p-8">
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
-                    <UsersIcon className="text-accent-secondary" size={48} />
-                    User Roster
-                </h1>
-                <p className="text-lg text-text-secondary mt-1">View, filter, and manage all users across the platform.</p>
+                <div className="flex justify-between items-center flex-wrap gap-4">
+                    <div>
+                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
+                            <UsersIcon className="text-accent-secondary" size={48} />
+                            User Roster
+                        </h1>
+                        <p className="text-lg text-text-secondary mt-1">View, filter, and manage all users across the platform.</p>
+                    </div>
+                    {currentUserData?.isSuperAdmin && (
+                        <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 bg-primary text-on-accent font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors">
+                            <UserPlus size={20} /> Create User
+                        </button>
+                    )}
+                </div>
             </header>
             
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-6">
@@ -336,6 +457,13 @@ const UserManagementPage: React.FC = () => {
                     marketCenters={Array.from(marketCenters.values())}
                 />
             )}
+            <CreateUserModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSave={handleCreateUser}
+                teams={allTeams}
+                marketCenters={allMarketCenters}
+            />
         </div>
     );
 };

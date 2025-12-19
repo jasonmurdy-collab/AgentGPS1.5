@@ -1,12 +1,15 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { getAuthInstance, getFirestoreInstance } from '../firebaseConfig';
+import { firebaseConfig } from '../config'; // Import raw config for secondary app
+import { initializeApp, deleteApp } from 'firebase/app'; // Import app management
 import { 
     onAuthStateChanged, 
     createUserWithEmailAndPassword, 
     signInWithEmailAndPassword, 
     signOut,
     updatePassword as firebaseUpdatePassword,
-    User as FirebaseUser
+    User as FirebaseUser,
+    getAuth // Import getAuth for secondary app
 } from 'firebase/auth';
 import { 
     doc, 
@@ -31,7 +34,8 @@ import {
     limit,
     deleteDoc,
     DocumentSnapshot,
-    runTransaction
+    runTransaction,
+    getFirestore // Import getFirestore for secondary app
 } from 'firebase/firestore';
 import { createNotification } from '../lib/notifications';
 import { processDailyTrackerDoc, processTransactionDoc, processNotificationDoc, processCommissionProfileDoc, processUserDoc, processTeamDoc, processPerformanceLogDoc, processPlaybookDoc, processClientLeadDoc, processClientLeadActivityDoc, processTodoItemDoc } from '../lib/firestoreUtils';
@@ -70,6 +74,7 @@ interface AuthContextType {
   loadingAgents: boolean;
   agentsError: string | null;
   signUpWithEmail: (email: string, password: string, name: string, options?: { role?: TeamMember['role']; teamId?: string; marketCenterId?: string; }) => Promise<void>;
+  createAccountForAgent: (email: string, password: string, name: string, role: TeamMember['role'], teamId: string | null, marketCenterId: string | null) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (profileData: Partial<Pick<TeamMember, 'name' | 'bio'>>) => Promise<void>;
@@ -299,6 +304,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (options.role === 'market_center_admin' && options.marketCenterId) batch.update(doc(db, 'marketCenters', options.marketCenterId), { adminIds: arrayUnion(newUser.uid) });
         await batch.commit();
     }, []);
+
+    // --- Create Account For Agent (Admin Action) ---
+    const createAccountForAgent = useCallback(async (email: string, password: string, name: string, role: TeamMember['role'], teamId: string | null, marketCenterId: string | null) => {
+        if (!firebaseConfig) throw new Error("Firebase config not found.");
+
+        // 1. Initialize a secondary app instance to create user without logging out the admin
+        const secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp');
+        const secondaryAuth = getAuth(secondaryApp);
+        const secondaryDb = getFirestore(secondaryApp);
+
+        try {
+            // 2. Create User on secondary auth (logs them in temporarily on that instance)
+            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+            const newUser = userCredential.user;
+
+            // 3. Write User Document using secondary instance (User writing to own doc = allowed by rules)
+            const userProfile: Omit<UserProfile, 'id'> = {
+                name,
+                email,
+                role,
+                gci: 0,
+                listings: 0,
+                calls: 0,
+                appointments: 0,
+                isNewAgent: true,
+                playbookProgress: {},
+                teamId: teamId || null,
+                marketCenterId: marketCenterId || null,
+            };
+            // Note: We use secondaryDb here to ensure the write is attributed to the new user
+            await setDoc(doc(secondaryDb, 'users', newUser.uid), userProfile);
+
+            // 4. Handle administrative side effects (Teams, MCs) using the PRIMARY DB (Admin credentials)
+            // This avoids permission errors since the new user can't write to Team/MC docs.
+            const primaryDb = getFirestoreInstance();
+            if (primaryDb) {
+                const batch = writeBatch(primaryDb);
+                if (teamId) {
+                    batch.update(doc(primaryDb, 'teams', teamId), { memberIds: arrayUnion(newUser.uid) });
+                }
+                if (role === 'market_center_admin' && marketCenterId) {
+                    batch.update(doc(primaryDb, 'marketCenters', marketCenterId), { adminIds: arrayUnion(newUser.uid) });
+                }
+                await batch.commit();
+            }
+        } catch (error) {
+            console.error("Error creating agent account:", error);
+            throw error;
+        } finally {
+            // 5. Cleanup secondary app
+            await signOut(secondaryAuth);
+            await deleteApp(secondaryApp);
+        }
+    }, []);
+
 
     const signInWithEmail = useCallback(async (email: string, password: string) => {
         const auth = getAuthInstance();
@@ -726,7 +786,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const coachData = coachDoc.data() as TeamMember;
         const oldAgentIds = new Set(Object.keys(coachData.contributingAgentIds || {}));
         const newAgentIdsSet = new Set(agentIds); // Renamed to avoid confusion with the map
-        // DO add comment above each fix.
         // Fix: Create newAgentIdsMap from newAgentIdsSet
         const newAgentIdsMap: Record<string, boolean> = {};
         newAgentIdsSet.forEach(id => {
@@ -1214,7 +1273,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, userData, getClientLeadsForTeam, getClientLeadsForUser, getCandidatesForMarketCenter, getCandidatesForRecruiter]);
 
     const value = useMemo(() => ({
-        user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, signInWithEmail, logout,
+        user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, createAccountForAgent, signInWithEmail, logout,
         updateUserProfile, updatePassword, joinTeam, createTeam, updateTheme, getTeamById, getUsersByIds,
         getAllUsers, getUsersForMarketCenter, leaveTeam, removeAgentFromTeam, getUserById, updateUserNewAgentStatus, getNewAgentResourcesForUser,
         saveNewAgentResources, updateUserMetrics, assignHomeworkToUser, getAssignedResourcesForUser,
@@ -1231,7 +1290,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
         addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts
     }), [
-        user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, signInWithEmail, logout,
+        user, userData, loading, managedAgents, loadingAgents, agentsError, signUpWithEmail, createAccountForAgent, signInWithEmail, logout,
         updateUserProfile, updatePassword, joinTeam, createTeam, updateTheme, getTeamById, getUsersByIds,
         getAllUsers, getUsersForMarketCenter, leaveTeam, removeAgentFromTeam, getUserById, updateUserNewAgentStatus, getNewAgentResourcesForUser,
         saveNewAgentResources, updateUserMetrics, assignHomeworkToUser, getAssignedResourcesForUser,
