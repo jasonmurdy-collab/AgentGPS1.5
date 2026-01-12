@@ -1,14 +1,110 @@
-
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Link } from 'react-router-dom';
-import { Settings, SlidersHorizontal, Users, Building, Plus, Trash2, UserPlus, X, ClipboardCopy, Link as LinkIcon } from 'lucide-react';
+import { 
+    Settings, 
+    SlidersHorizontal, 
+    Users, 
+    Building, 
+    Plus, 
+    Trash2, 
+    UserPlus, 
+    X, 
+    ClipboardCopy, 
+    Link as LinkIcon, 
+    Database, 
+    Download,
+    FileSpreadsheet,
+    Target,
+    Briefcase
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useGoals } from '../contexts/GoalContext';
 import type { MarketCenter, TeamMember, Team } from '../types';
 import { Spinner } from '../components/ui/Spinner';
+import { downloadCsv } from '../lib/exportUtils';
+import { getFirestoreInstance } from '../firebaseConfig';
+import { collection, getDocs } from 'firebase/firestore';
 
+const PlatformDataExport: React.FC = () => {
+    const { getAllUsers, getMarketCenters, getAllTransactionsForAdmin } = useAuth();
+    const { getAllGoals } = useGoals();
+    const [loadingExport, setLoadingExport] = useState<string | null>(null);
+
+    const handleExport = async (collectionName: string) => {
+        setLoadingExport(collectionName);
+        try {
+            let data: any[] = [];
+            let fileName = `agentgps_${collectionName}_${new Date().toISOString().split('T')[0]}`;
+
+            switch (collectionName) {
+                case 'users':
+                    data = await getAllUsers();
+                    break;
+                case 'transactions':
+                    data = await getAllTransactionsForAdmin();
+                    break;
+                case 'goals':
+                    data = await getAllGoals();
+                    break;
+                case 'marketCenters':
+                    data = await getMarketCenters();
+                    break;
+                default:
+                    throw new Error("Unknown collection");
+            }
+
+            downloadCsv(data, fileName);
+        } catch (error) {
+            console.error(`Export failed for ${collectionName}:`, error);
+            alert(`Failed to export ${collectionName}. Check console for details.`);
+        } finally {
+            setLoadingExport(null);
+        }
+    };
+
+    const exportItems = [
+        { id: 'users', label: 'User Roster', icon: Users, description: 'All registered agents, admins, and coaches.' },
+        { id: 'transactions', label: 'Transactions', icon: Briefcase, description: 'Full history of logged deals and commissions.' },
+        { id: 'goals', label: 'Performance Goals', icon: Target, description: 'All annual, quarterly, and weekly goal data.' },
+        { id: 'marketCenters', label: 'Market Centers', icon: Building, description: 'Brokerage details and admin assignments.' },
+    ];
+
+    return (
+        <div className="space-y-4 mt-6 pt-6 border-t border-border">
+            <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Database className="text-accent" /> Export Center
+            </h2>
+            <p className="text-sm text-text-secondary -mt-2">
+                Download your platform data as CSV files for backup or external analysis.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {exportItems.map((item) => (
+                    <div key={item.id} className="p-4 bg-background/50 border border-border rounded-xl flex items-center justify-between group hover:border-primary transition-colors">
+                        <div className="flex items-center gap-4">
+                            <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                                <item.icon size={20} />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-text-primary">{item.label}</h4>
+                                <p className="text-xs text-text-secondary">{item.description}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => handleExport(item.id)}
+                            disabled={loadingExport !== null}
+                            className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+                            title={`Export ${item.label}`}
+                        >
+                            {loadingExport === item.id ? <Spinner className="w-5 h-5" /> : <Download size={20} />}
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 const SignupLinkGenerator: React.FC = () => {
     const { getAllTeams, getMarketCenters } = useAuth();
@@ -339,6 +435,7 @@ const AdminSettingsPage: React.FC = () => {
             </Link>
             <MarketCenterManagement />
             <SignupLinkGenerator />
+            <PlatformDataExport />
           </div>
         </Card>
       </div>
