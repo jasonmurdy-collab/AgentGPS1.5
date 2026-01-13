@@ -342,8 +342,8 @@ export interface Module {
 export interface Lesson {
   id: string;
   title: string;
-  type: 'text' | 'video' | 'link' | 'quiz' | 'checklist';
-  content: string | QuizContent | ChecklistContent;
+  type: 'text' | 'video' | 'link' | 'quiz' | 'checklist' | 'presentation' | 'submission';
+  content: string | QuizContent | ChecklistContent | SubmissionRequirement;
   order: number;
 }
 export type QuizContent = QuizQuestion[];
@@ -400,4 +400,21 @@ export interface TodoItem {
   candidateId?: string | null;
   clientLeadName?: string | null;
   candidateName?: string | null;
+}
+
+export interface SubmissionRequirement {
+  prompt: string;
+  uploadType: 'text_entry' | 'file_upload' | 'video_link';
+  required: boolean;
+}
+
+export interface UserSubmission {
+  id: string;
+  userId: string;
+  lessonId: string;
+  playbookId: string;
+  content: string; // The text answer or file URL
+  status: 'pending' | 'approved' | 'rejected';
+  coachFeedback?: string;
+  submittedAt: string; // ISO Date
 }

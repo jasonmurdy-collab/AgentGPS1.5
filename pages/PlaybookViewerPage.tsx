@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
-import { doc, getDoc } from 'firebase/firestore';
+import { getFirestoreInstance } from '../firebaseConfig';
+import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Playbook, Module, Lesson, QuizContent, ChecklistContent } from '../types';
-import { ArrowLeft, BookOpen, Link as LinkIcon, Video, FileText, BrainCircuit, ListChecks, CheckSquare, CheckCircle, XCircle, ArrowRight, ArrowLeft as ArrowLeftIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Playbook, Module, Lesson, QuizContent, ChecklistContent, SubmissionRequirement } from '../types';
+import { ArrowLeft, BookOpen, Link as LinkIcon, Video, FileText, BrainCircuit, ListChecks, CheckSquare, CheckCircle, XCircle, ArrowRight, ArrowLeft as ArrowLeftIcon, ChevronDown, ChevronUp, Presentation, Upload } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
@@ -18,6 +18,22 @@ const getYouTubeId = (url: string): string | null => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
+};
+
+const SlideViewer: React.FC<{ content: string }> = ({ content }) => {
+    const isEmbed = content.trim().startsWith('<iframe');
+    if (isEmbed) {
+        return (
+            <div
+                className="aspect-video w-full rounded-lg overflow-hidden border border-border bg-black [&>iframe]:w-full [&>iframe]:h-full"
+                dangerouslySetInnerHTML={{ __html: content }}
+            />
+        );
+    }
+    // Fallback for direct PDF links or URLs
+    return (
+        <iframe src={content} className="w-full h-[600px] rounded-lg border border-border bg-surface" title="Slide Deck" />
+    );
 };
 
 const ChecklistViewer: React.FC<{
@@ -146,12 +162,14 @@ const QuizViewer: React.FC<{
 
 const PlaybookViewerPage: React.FC = () => {
     const { playbookId } = useParams<{ playbookId: string }>();
-    const { userData, updatePlaybookProgress } = useAuth();
+    const { user, userData, updatePlaybookProgress } = useAuth();
     const [playbook, setPlaybook] = useState<Playbook | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+    const [submissionText, setSubmissionText] = useState('');
+    const [submitting, setSubmitting] = useState(false);
 
     const completedLessons = useMemo(() => {
         if (!userData || !playbookId || !userData.playbookProgress) return [];
@@ -188,7 +206,7 @@ const PlaybookViewerPage: React.FC = () => {
             if (!playbookId) { setError("Playbook ID is missing."); setLoading(false); return; }
             setLoading(true);
             try {
-                const docSnap = await getDoc(doc(getFirestoreInstance(), 'playbooks', playbookId)); // Fix: Use getFirestoreInstance()
+                const docSnap = await getDoc(doc(getFirestoreInstance(), 'playbooks', playbookId));
                 if (docSnap.exists()) {
                     const pb = processPlaybookDoc(docSnap);
                     setPlaybook(pb);
@@ -212,9 +230,32 @@ const PlaybookViewerPage: React.FC = () => {
         handleProgressUpdate([...completedLessons, activeLesson.id]);
     };
 
+    const handleSubmitWork = async (lessonId: string) => {
+        if (!user || !playbookId) return;
+        setSubmitting(true);
+        try {
+            await addDoc(collection(getFirestoreInstance(), 'submissions'), {
+                userId: user.uid,
+                lessonId: lessonId,
+                playbookId: playbookId,
+                content: submissionText,
+                status: 'pending',
+                submittedAt: serverTimestamp()
+            });
+            handleProgressUpdate([...completedLessons, lessonId]);
+            setSubmissionText('');
+            alert('Assignment submitted successfully!');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to submit assignment.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const renderLessonContent = (lesson: Lesson) => {
         const isCompleted = completedLessons.includes(lesson.id);
-        const canMarkComplete = ['text', 'video', 'link'].includes(lesson.type);
+        const canMarkComplete = ['text', 'video', 'link', 'presentation'].includes(lesson.type);
 
         const videoId = lesson.type === 'video' ? getYouTubeId(lesson.content as string) : null;
         const sanitizedHtml = lesson.type === 'text' ? DOMPurify.sanitize(marked(lesson.content as string)) : '';
@@ -227,6 +268,9 @@ const PlaybookViewerPage: React.FC = () => {
                 {lesson.type === 'link' && (
                     <a href={lesson.content as string} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-primary text-on-accent font-semibold py-3 px-5 rounded-lg hover:bg-opacity-90"><LinkIcon size={16}/> Open Resource</a>
                 )}
+                {lesson.type === 'presentation' && (
+                    <SlideViewer content={lesson.content as string} />
+                )}
                 {lesson.type === 'text' && (
                     <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
                 )}
@@ -235,6 +279,36 @@ const PlaybookViewerPage: React.FC = () => {
                 )}
                 {lesson.type === 'checklist' && (
                     <ChecklistViewer lesson={lesson} completedLessons={completedLessons} onProgressUpdate={handleProgressUpdate} />
+                )}
+                {lesson.type === 'submission' && (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-surface border border-border rounded-lg">
+                            <h3 className="font-bold mb-2">Assignment:</h3>
+                            <p>{(lesson.content as SubmissionRequirement).prompt}</p>
+                        </div>
+                        {isCompleted ? (
+                            <div className="p-4 bg-success/10 border border-success/30 rounded-lg text-success flex items-center gap-2">
+                                <CheckCircle size={20} />
+                                <span className="font-semibold">Assignment Submitted</span>
+                            </div>
+                        ) : (
+                            <>
+                                <textarea
+                                    className="w-full min-h-[150px] bg-input border border-border rounded-lg p-3 text-sm"
+                                    placeholder="Type your response or paste your link here..."
+                                    value={submissionText}
+                                    onChange={e => setSubmissionText(e.target.value)}
+                                />
+                                <button
+                                    onClick={() => handleSubmitWork(lesson.id)}
+                                    disabled={submitting || !submissionText.trim()}
+                                    className="bg-primary text-on-accent px-6 py-2 rounded-lg font-semibold flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {submitting ? <Spinner className="w-4 h-4" /> : 'Submit Assignment'}
+                                </button>
+                            </>
+                        )}
+                    </div>
                 )}
                 {canMarkComplete && (
                     <div className="mt-8 pt-6 border-t border-border flex justify-center">
@@ -251,7 +325,7 @@ const PlaybookViewerPage: React.FC = () => {
     if (error) return <Card className="m-8 text-center text-destructive">{error}</Card>;
     if (!playbook) return null;
     
-    const LessonIcon = { link: LinkIcon, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks };
+    const LessonIcon = { link: LinkIcon, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks, presentation: Presentation, submission: Upload };
     const totalLessons = allLessonsFlat.length;
 
     return (

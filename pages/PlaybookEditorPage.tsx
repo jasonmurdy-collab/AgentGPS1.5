@@ -7,11 +7,12 @@ import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc, setDoc, serverTimestamp, Timestamp, collection } from 'firebase/firestore';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Playbook, Module, Lesson, QuizContent, ChecklistContent, QuizQuestion, ChecklistItem, QuizQuestionOption, Team, MarketCenter } from '../types';
-import { Save, Plus, Trash2, Edit, ChevronUp, ChevronDown, Link, Video, FileText, BrainCircuit, ListChecks, CheckSquare, Sparkles, GripVertical, ClipboardSignature } from 'lucide-react';
+import { Playbook, Module, Lesson, QuizContent, ChecklistContent, QuizQuestion, ChecklistItem, QuizQuestionOption, Team, MarketCenter, SubmissionRequirement } from '../types';
+import { Save, Plus, Trash2, Edit, ChevronUp, ChevronDown, Link, Video, FileText, BrainCircuit, ListChecks, CheckSquare, Sparkles, GripVertical, ClipboardSignature, Presentation, Upload } from 'lucide-react';
 import { generateQuiz, generateRolePlayScenario } from '../lib/gemini';
 import { createPortal } from 'react-dom';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
+import { RichTextEditor } from '../components/ui/RichTextEditor';
 
 const QuizEditor: React.FC<{ content: QuizContent; onUpdate: (newContent: QuizContent) => void; }> = React.memo(({ content, onUpdate }) => {
     const [sourceText, setSourceText] = useState('');
@@ -212,13 +213,52 @@ const LessonEditor: React.FC<{ lesson: Lesson, onUpdate: (field: keyof Lesson, v
     return (
         <>
             {lesson.type === 'text' && (
-                <>
-                    <textarea value={lesson.content as string} onChange={e => onUpdate('content', e.target.value)} className="w-full min-h-[150px] bg-input border border-border rounded-md p-2 text-sm" placeholder="Enter lesson text here. Markdown is supported for formatting." />
-                    <p className="text-xs text-text-secondary mt-1">Supports Markdown for **bold**, *italic*, lists, and more.</p>
-                </>
+                <RichTextEditor 
+                    content={lesson.content as string} 
+                    onChange={html => onUpdate('content', html)} 
+                    placeholder="Enter lesson text here..."
+                />
             )}
             {(lesson.type === 'video' || lesson.type === 'link') && (
                 <input type="url" value={lesson.content as string} onChange={e => onUpdate('content', e.target.value)} className="w-full bg-input border border-border rounded-md p-2 text-sm" placeholder={lesson.type === 'video' ? "YouTube URL or Video ID" : "https://example.com/document.pdf"} />
+            )}
+            {lesson.type === 'presentation' && (
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Presentation Embed Code or URL</label>
+                    <textarea 
+                        value={lesson.content as string} 
+                        onChange={e => onUpdate('content', e.target.value)} 
+                        className="w-full min-h-[100px] bg-input border border-border rounded-md p-2 text-sm" 
+                        placeholder='<iframe src="..." ...></iframe> or https://...' 
+                    />
+                </div>
+            )}
+            {lesson.type === 'submission' && (
+                <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                    <h4 className="font-bold flex items-center gap-2"><Upload size={16}/> Submission Settings</h4>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Prompt / Instructions</label>
+                        <input
+                            type="text"
+                            value={(lesson.content as SubmissionRequirement)?.prompt || ''}
+                            onChange={e => onUpdate('content', { ...lesson.content as any, prompt: e.target.value })}
+                            className="w-full bg-input border border-border rounded-md p-2"
+                            placeholder="e.g., Upload a video of your listing presentation..."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Submission Type</label>
+                        <select
+                            value={(lesson.content as SubmissionRequirement)?.uploadType || 'text_entry'}
+                            onChange={e => onUpdate('content', { ...lesson.content as any, uploadType: e.target.value })}
+                            className="w-full bg-input border border-border rounded-md p-2"
+                        >
+                            <option value="text_entry">Written Response</option>
+                            <option value="file_upload">File Upload (PDF/Doc)</option>
+                            <option value="video_link">Video URL (Loom/YouTube)</option>
+                        </select>
+                    </div>
+                </div>
             )}
             {lesson.type === 'quiz' && (
                 <QuizEditor content={Array.isArray(lesson.content) ? lesson.content as QuizContent : []} onUpdate={newContent => onUpdate('content', newContent)} />
@@ -237,8 +277,10 @@ const LESSON_TYPE_PALETTE = [
     { name: 'Text', type: 'text', icon: FileText, defaultTitle: 'New Text Lesson' },
     { name: 'Video', type: 'video', icon: Video, defaultTitle: 'New Video Lesson' },
     { name: 'Link', type: 'link', icon: Link, defaultTitle: 'New Link' },
+    { name: 'Slide Deck', type: 'presentation', icon: Presentation, defaultTitle: 'New Presentation' },
     { name: 'Quiz', type: 'quiz', icon: BrainCircuit, defaultTitle: 'New Quiz' },
     { name: 'Checklist', type: 'checklist', icon: ListChecks, defaultTitle: 'New Checklist' },
+    { name: 'Submission', type: 'submission', icon: Upload, defaultTitle: 'New Assignment' },
     { name: 'Script', type: 'text', icon: ClipboardSignature, defaultTitle: 'New Script' },
     { name: 'Generate Content', type: 'text', icon: Sparkles, defaultTitle: 'AI Generated Content' },
 ];
@@ -277,7 +319,7 @@ const LessonTile: React.FC<{
     const getIcon = useCallback(() => {
         if (lesson.title.toLowerCase().includes('script')) return ClipboardSignature;
         if (lesson.title.toLowerCase().includes('ai generated')) return Sparkles;
-        return { link: Link, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks }[lesson.type];
+        return { link: Link, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks, presentation: Presentation, submission: Upload }[lesson.type];
     }, [lesson.title, lesson.type]);
     const LessonIcon = getIcon();
 
@@ -461,7 +503,19 @@ const PlaybookEditorPage: React.FC = () => {
             const lessonInfo = JSON.parse(lessonInfoStr);
             const module = playbook.modules.find(m => m.id === moduleId);
             if (!module) return;
-            const newLesson: Lesson = { id: `les-${Date.now()}`, title: lessonInfo.defaultTitle, type: lessonInfo.type, content: (lessonInfo.type === 'quiz' || lessonInfo.type === 'checklist') ? [] : '', order: module.lessons.length };
+            
+            // Fix the content initialization here to include default properties for SubmissionRequirement
+            const initialContent = lessonInfo.type === 'submission' 
+                ? { prompt: '', uploadType: 'text_entry', required: true } as SubmissionRequirement
+                : ((lessonInfo.type === 'quiz' || lessonInfo.type === 'checklist') ? [] : '');
+
+            const newLesson: Lesson = { 
+                id: `les-${Date.now()}`, 
+                title: lessonInfo.defaultTitle, 
+                type: lessonInfo.type, 
+                content: initialContent, 
+                order: module.lessons.length 
+            };
             updatePlaybook('modules', playbook.modules.map(m => m.id === moduleId ? { ...m, lessons: [...m.lessons, newLesson] } : m));
         }
     }, [playbook, updatePlaybook]);
@@ -555,7 +609,6 @@ const PlaybookEditorPage: React.FC = () => {
                                         <div className="flex items-center"><button onClick={() => setExpandedModules(p => ({...p, [module.id]: !p[module.id]}))} className="p-2 text-text-secondary hover:bg-primary/10 rounded-full">{expandedModules[module.id] ? <ChevronUp/> : <ChevronDown/>}</button><button onClick={() => deleteModule(module.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded-full"><Trash2 size={16}/></button></div>
                                     </div>
                                     { (expandedModules[module.id] ?? true) && (
-                                        // Fix: Corrected typo from `moduleId` to `module.id` to pass the correct module ID when dropping a new lesson.
                                         <div onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => handleDropNewLesson(e, module.id)} className="space-y-4 min-h-[60px] border-2 border-dashed border-transparent hover:border-primary/50 p-2 rounded-lg">
                                             {module.lessons.map((lesson) => (
                                                 <div key={lesson.id} onDragOver={e => handleDragOver(e, 'lesson', lesson.id, module.id)} onDrop={() => handleDrop('lesson', lesson.id)} onDragEnd={() => setDraggedItem(null)} className={`transition-all duration-150 ${dragOverItem?.type === 'lesson' && dragOverItem?.id === lesson.id ? 'pt-2' : ''}`}>
