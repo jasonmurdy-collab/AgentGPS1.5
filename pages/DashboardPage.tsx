@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
@@ -9,16 +6,56 @@ import { useGoals } from '../contexts/GoalContext';
 import { WelcomeCard } from '../components/dashboard/WelcomeCard';
 import { GpsSummaryCard } from '../components/dashboard/GpsSummaryCard';
 import { SkeletonCard } from '../components/ui/SkeletonCard';
-import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen } from 'lucide-react';
+import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Plus } from 'lucide-react';
 import { Card } from '../components/ui/Card';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, P } from '../contexts/AuthContext';
 import { DashboardVisualizations } from '../components/dashboard/DashboardVisualizations';
-import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
+import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { Transaction, Goal, Playbook } from '../types';
 import { GoalModal } from '../components/goals/AddGoalModal';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
 import AnnouncementFeed from '../components/dashboard/AnnouncementFeed';
+
+const MobileQuickActions: React.FC = () => {
+    const { userData } = useAuth();
+    const isRecruiter = P.isRecruiter(userData);
+    const isCoach = P.isCoach(userData);
+
+    const actions = [
+        { 
+            label: 'Daily Log', 
+            icon: ClipboardList, 
+            path: isRecruiter ? '/recruiter-daily-tracker' : isCoach ? '/coach-daily-tracker' : '/daily-tracker',
+            color: 'bg-primary' 
+        },
+        { 
+            label: isRecruiter ? 'Recruits' : 'Leads', 
+            icon: Users, 
+            path: isRecruiter ? '/recruitment-hub' : '/client-pipeline',
+            color: 'bg-accent-secondary' 
+        },
+        { 
+            label: 'New Task', 
+            icon: ListTodo, 
+            path: '/todos',
+            color: 'bg-purple-500' 
+        }
+    ];
+
+    return (
+        <div className="lg:hidden grid grid-cols-3 gap-3 mb-6">
+            {actions.map((action, i) => (
+                <Link key={i} to={action.path} className="flex flex-col items-center gap-2">
+                    <div className={`${action.color} w-full aspect-square rounded-2xl flex items-center justify-center text-white shadow-lg shadow-${action.color}/20`}>
+                        <action.icon size={28} />
+                    </div>
+                    <span className="text-[11px] font-bold text-text-secondary uppercase tracking-tight">{action.label}</span>
+                </Link>
+            ))}
+        </div>
+    );
+};
 
 const StatsCard: React.FC<{ gci: number; listings: number }> = ({ gci, listings }) => {
     const stats = [
@@ -96,7 +133,6 @@ const DashboardLoadingSkeleton: React.FC = () => (
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                {/* Left Column Skeleton */}
                 <div className="lg:col-span-2 space-y-6">
                     <SkeletonCard className="h-24" />
                     <SkeletonCard className="h-48" />
@@ -105,7 +141,6 @@ const DashboardLoadingSkeleton: React.FC = () => (
                         <SkeletonCard className="h-60" />
                     </div>
                 </div>
-                {/* Right Column Skeleton */}
                 <div className="lg:col-span-1 space-y-6">
                     <SkeletonCard className="h-24" />
                     <SkeletonCard className="h-64" />
@@ -126,7 +161,6 @@ const DashboardPage: React.FC = () => {
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
   const [loadingPlaybooks, setLoadingPlaybooks] = useState(true);
 
-  // Stats are now derived directly from userData for performance
   const currentUserGCI = userData?.gci || 0;
   const currentUserListings = userData?.listings || 0;
 
@@ -136,7 +170,7 @@ const DashboardPage: React.FC = () => {
             return;
         }
         setLoadingPlaybooks(true);
-        const playbooksRef = collection(getFirestoreInstance(), 'playbooks'); // Fix: Use getFirestoreInstance()
+        const playbooksRef = collection(getFirestoreInstance(), 'playbooks');
         const queriesToRun = [
             query(playbooksRef, where('teamId', '==', null), where('marketCenterId', '==', null))
         ];
@@ -195,7 +229,6 @@ const DashboardPage: React.FC = () => {
   };
 
   const topGoals = useMemo(() => {
-    // A simple logic to get top 3 goals (e.g., annual, then by progress)
     return [...goals]
       .sort((a, b) => {
         if (a.type === 'Annual' && b.type !== 'Annual') return -1;
@@ -232,6 +265,7 @@ const DashboardPage: React.FC = () => {
         {activeTab === 'overview' ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-6">
+              <MobileQuickActions />
               <WelcomeCard />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {topGoals.length > 0 ? (

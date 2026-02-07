@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,16 +7,215 @@ import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/fires
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { Playbook, Module, Lesson, QuizContent, ChecklistContent, SubmissionRequirement } from '../types';
-import { ArrowLeft, BookOpen, Link as LinkIcon, Video, FileText, BrainCircuit, ListChecks, CheckSquare, CheckCircle, XCircle, ArrowRight, ArrowLeft as ArrowLeftIcon, ChevronDown, ChevronUp, Presentation, Upload } from 'lucide-react';
+import { 
+    ArrowLeft, BookOpen, Link as LinkIcon, Video, FileText, 
+    BrainCircuit, ListChecks, CheckSquare, CheckCircle, XCircle, 
+    ArrowRight, ArrowLeft as ArrowLeftIcon, ChevronDown, ChevronUp, 
+    Presentation, Upload, Eye, ExternalLink, X, AlertTriangle,
+    Maximize2, Minimize2, Copy, Share2
+} from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
+import { createPortal } from 'react-dom';
 
-const getYouTubeId = (url: string): string | null => {
-    if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+/**
+ * Robust Video Parser for YouTube, Loom, and Vimeo
+ */
+const parseVideoUrl = (url: string): { type: 'youtube' | 'loom' | 'vimeo' | 'invalid', id: string | null, embedUrl: string | null } => {
+    if (!url) return { type: 'invalid', id: null, embedUrl: null };
+
+    // YouTube
+    const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
+    const ytMatch = url.match(ytRegExp);
+    if (ytMatch && ytMatch[2].length === 11) {
+        return { type: 'youtube', id: ytMatch[2], embedUrl: `https://www.youtube.com/embed/${ytMatch[2]}` };
+    }
+
+    // Loom
+    const loomRegExp = /loom\.com\/(share|embed)\/([a-f0-9]+)/;
+    const loomMatch = url.match(loomRegExp);
+    if (loomMatch) {
+        return { type: 'loom', id: loomMatch[2], embedUrl: `https://www.loom.com/embed/${loomMatch[2]}` };
+    }
+
+    // Vimeo
+    const vimeoRegExp = /vimeo\.com\/(?:.*\/)?([0-9]+)/;
+    const vimeoMatch = url.match(vimeoRegExp);
+    if (vimeoMatch) {
+        return { type: 'vimeo', id: vimeoMatch[1], embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}` };
+    }
+
+    return { type: 'invalid', id: null, embedUrl: null };
+};
+
+const VideoPlayer: React.FC<{ url: string; title: string }> = ({ url, title }) => {
+    const [isFocused, setIsFocused] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const videoData = useMemo(() => parseVideoUrl(url), [url]);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const playerContent = (
+        <div className={`relative group w-full bg-black overflow-hidden shadow-2xl ${isFocused ? 'h-full' : 'aspect-video rounded-2xl'}`}>
+            {videoData.type !== 'invalid' ? (
+                <iframe 
+                    className="w-full h-full border-none"
+                    src={videoData.embedUrl!}
+                    title={title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                ></iframe>
+            ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-white/50 gap-4 p-8 text-center">
+                    <AlertTriangle size={48} className="text-warning" />
+                    <div>
+                        <p className="font-bold text-lg">Unsupported Video Source</p>
+                        <p className="text-sm">We currently support YouTube, Loom, and Vimeo.</p>
+                    </div>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-white text-sm font-bold flex items-center gap-2">
+                        <ExternalLink size={16} /> Open External Link
+                    </a>
+                </div>
+            )}
+
+            {/* Overlay Controls */}
+            <div className={`absolute top-4 right-4 flex gap-2 transition-opacity duration-300 ${isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                <button 
+                    onClick={handleCopy}
+                    className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg hover:bg-black/80 transition-colors"
+                    title="Copy Video URL"
+                >
+                    {copied ? <CheckCircle size={18} className="text-success" /> : <Share2 size={18} />}
+                </button>
+                <button 
+                    onClick={() => setIsFocused(!isFocused)}
+                    className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg hover:bg-black/80 transition-colors"
+                    title={isFocused ? "Exit Focus Mode" : "Enter Focus Mode"}
+                >
+                    {isFocused ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                {isFocused && (
+                    <button 
+                        onClick={() => setIsFocused(false)}
+                        className="p-2 bg-destructive/80 backdrop-blur-md text-white rounded-lg hover:bg-destructive transition-colors"
+                    >
+                        <X size={18} />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+
+    if (isFocused) {
+        return createPortal(
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 md:p-12 animate-in fade-in duration-300">
+                <div className="w-full h-full max-w-6xl relative flex flex-col gap-4">
+                    <div className="flex items-center justify-between text-white px-2">
+                        <h3 className="text-xl font-bold truncate pr-8">{title}</h3>
+                        <div className="flex items-center gap-4 text-sm font-medium opacity-60">
+                            Focus Mode Active
+                        </div>
+                    </div>
+                    <div className="flex-1 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+                        {playerContent}
+                    </div>
+                </div>
+            </div>,
+            document.body
+        );
+    }
+
+    return playerContent;
+};
+
+const DrivePreviewModal: React.FC<{ url: string; title: string; onClose: () => void }> = ({ url, title, onClose }) => {
+    const embedUrl = getEmbeddableDriveUrl(url);
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
+            <div className="w-full h-full max-w-6xl bg-surface rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between p-4 border-b border-border bg-surface">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                            <FileText size={20} className="text-primary" />
+                        </div>
+                        <h3 className="font-bold text-lg truncate max-w-[200px] md:max-w-md">{title}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <a 
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg hover:bg-primary/5 text-text-secondary transition-colors"
+                        >
+                            <ExternalLink size={16} /> <span className="hidden sm:inline">Open in Drive</span>
+                        </a>
+                        <button 
+                            onClick={onClose} 
+                            className="p-2 hover:bg-destructive/10 text-text-secondary hover:text-destructive rounded-lg transition-colors"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 bg-background relative">
+                    {embedUrl ? (
+                        <iframe 
+                            src={embedUrl} 
+                            className="w-full h-full border-none" 
+                            title={title}
+                            allow="autoplay"
+                        />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+                            <AlertTriangle size={48} className="text-warning" />
+                            <div>
+                                <p className="font-bold text-xl">Preview Unavailable</p>
+                                <p className="text-text-secondary">This link format might not support in-app previewing.</p>
+                            </div>
+                            <a 
+                                href={url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="bg-primary text-on-accent px-6 py-2 rounded-lg font-bold"
+                            >
+                                Open External Resource
+                            </a>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const getEmbeddableDriveUrl = (url: string): string | null => {
+    if (!url || !url.includes('drive.google.com') && !url.includes('docs.google.com')) return null;
+
+    try {
+        if (url.includes('/file/d/')) {
+            return url.replace(/\/view.*$/, '/preview').replace(/\/edit.*$/, '/preview');
+        }
+        if (url.includes('/document/d/') || url.includes('/spreadsheets/d/') || url.includes('/presentation/d/')) {
+            const baseUrl = url.split(/[?#]/)[0];
+            if (baseUrl.endsWith('/edit')) {
+                return baseUrl.replace(/\/edit$/, '/preview');
+            }
+            if (!baseUrl.endsWith('/preview')) {
+                return `${baseUrl}/preview`;
+            }
+            return baseUrl;
+        }
+    } catch (e) {
+        console.error("Error parsing Drive URL", e);
+    }
+    return url;
 };
 
 const SlideViewer: React.FC<{ content: string }> = ({ content }) => {
@@ -30,7 +228,6 @@ const SlideViewer: React.FC<{ content: string }> = ({ content }) => {
             />
         );
     }
-    // Fallback for direct PDF links or URLs
     return (
         <iframe src={content} className="w-full h-[600px] rounded-lg border border-border bg-surface" title="Slide Deck" />
     );
@@ -170,6 +367,8 @@ const PlaybookViewerPage: React.FC = () => {
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
     const [submissionText, setSubmissionText] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     const completedLessons = useMemo(() => {
         if (!userData || !playbookId || !userData.playbookProgress) return [];
@@ -257,16 +456,45 @@ const PlaybookViewerPage: React.FC = () => {
         const isCompleted = completedLessons.includes(lesson.id);
         const canMarkComplete = ['text', 'video', 'link', 'presentation'].includes(lesson.type);
 
-        const videoId = lesson.type === 'video' ? getYouTubeId(lesson.content as string) : null;
         const sanitizedHtml = lesson.type === 'text' ? DOMPurify.sanitize(marked(lesson.content as string)) : '';
+        const isDriveLink = lesson.type === 'link' && ((lesson.content as string).includes('drive.google.com') || (lesson.content as string).includes('docs.google.com'));
 
         return (
             <>
                 {lesson.type === 'video' && (
-                     videoId ? <div className="aspect-video bg-black rounded-lg"><iframe className="w-full h-full rounded-lg" src={`https://www.youtube.com/embed/${videoId}`} title={lesson.title} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe></div> : <p className="text-destructive">Invalid YouTube URL.</p>
+                     <VideoPlayer url={lesson.content as string} title={lesson.title} />
                 )}
                 {lesson.type === 'link' && (
-                    <a href={lesson.content as string} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-primary text-on-accent font-semibold py-3 px-5 rounded-lg hover:bg-opacity-90"><LinkIcon size={16}/> Open Resource</a>
+                    <div className="flex flex-col items-center gap-4 py-8">
+                        <div className="p-8 bg-surface border-2 border-dashed border-border rounded-3xl flex flex-col items-center text-center max-w-md w-full">
+                            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
+                                {isDriveLink ? <FileText size={32} className="text-primary" /> : <LinkIcon size={32} className="text-primary" />}
+                            </div>
+                            <h3 className="font-bold text-xl mb-2">{lesson.title}</h3>
+                            <p className="text-sm text-text-secondary mb-6">
+                                {isDriveLink ? 'This resource is a Google Drive document.' : 'This resource is an external link.'}
+                            </p>
+                            
+                            <div className="flex flex-col w-full gap-3">
+                                {isDriveLink && (
+                                    <button 
+                                        onClick={() => setPreviewUrl(lesson.content as string)} 
+                                        className="flex items-center justify-center gap-2 bg-primary text-on-accent font-bold py-3 px-6 rounded-xl hover:bg-opacity-90 transition-all shadow-lg shadow-primary/20"
+                                    >
+                                        <Eye size={18} /> Preview Document
+                                    </button>
+                                )}
+                                <a 
+                                    href={lesson.content as string} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className={`flex items-center justify-center gap-2 font-bold py-3 px-6 rounded-xl transition-all ${isDriveLink ? 'bg-surface border border-border hover:bg-primary/5 text-text-primary' : 'bg-primary text-on-accent shadow-lg shadow-primary/20 hover:bg-opacity-90'}`}
+                                >
+                                    <ExternalLink size={18} /> {isDriveLink ? 'Open in Drive' : 'Open Resource'}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 )}
                 {lesson.type === 'presentation' && (
                     <SlideViewer content={lesson.content as string} />
@@ -373,11 +601,11 @@ const PlaybookViewerPage: React.FC = () => {
                                 {renderLessonContent(activeLesson)}
                             </div>
                             <div className="flex justify-between items-center p-4 border-t border-border flex-shrink-0">
-                                <button onClick={() => setActiveLesson(prevLesson)} disabled={!prevLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/10">
+                                <button onClick={() => setActiveLesson(prevLesson)} disabled={!prevLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
                                    <ArrowLeftIcon size={16}/> Previous
                                 </button>
                                 <span className="text-sm text-text-secondary">{currentIndex + 1} / {totalLessons}</span>
-                                <button onClick={() => setActiveLesson(nextLesson)} disabled={!nextLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/10">
+                                <button onClick={() => setActiveLesson(nextLesson)} disabled={!nextLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
                                    Next <ArrowRight size={16}/>
                                 </button>
                             </div>
@@ -391,6 +619,15 @@ const PlaybookViewerPage: React.FC = () => {
                     )}
                 </main>
             </div>
+            
+            {/* Modal for Google Drive Preview */}
+            {previewUrl && activeLesson && (
+                <DrivePreviewModal 
+                    url={previewUrl} 
+                    title={activeLesson.title} 
+                    onClose={() => setPreviewUrl(null)} 
+                />
+            )}
         </div>
     );
 };
