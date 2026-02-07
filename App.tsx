@@ -1,5 +1,3 @@
-
-
 import React, { Suspense, lazy } from 'react';
 import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { GoalProvider } from './contexts/GoalContext';
@@ -8,7 +6,7 @@ import { Spinner } from './components/ui/Spinner';
 import { TransactionsProvider } from './contexts/TransactionsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 
-// Import your new layout components
+// Import layout components
 import { MainLayout } from './layouts/MainLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -39,7 +37,6 @@ const CoachingFinancialsPage = lazy(() => import('./pages/CoachingFinancialsPage
 const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage'));
 const HabitTrackerDesignerPage = lazy(() => import('./pages/CoachHabitSettingsPage'));
 const ResourceLibraryPage = lazy(() => import('./pages/ResourceLibraryPage'));
-// Fix: Adjust lazy import to expect a default export for ResourceManagementPage.
 const ResourceManagementPage = lazy(() => import('./pages/ResourceManagementPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage'));
@@ -54,16 +51,11 @@ const ProfitShareCalculatorPage = lazy(() => import('./pages/ProfitShareCalculat
 const AgentDetailPage = lazy(() => import('./pages/AgentDetailPage'));
 const ClientPipelinePage = lazy(() => import('./pages/ClientPipelinePage'));
 const TodoPage = lazy(() => import('./pages/TodoPage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 
-
-/**
-* This component now ONLY handles routing logic.
-* The layout (sidebar/header) is handled by <MainLayout />.
-*/
 const AppRoutes: React.FC = () => {
     const { user, userData, loading } = useAuth();
 
-    // 1. Show full-screen spinner while auth is loading
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-background">
@@ -72,7 +64,6 @@ const AppRoutes: React.FC = () => {
         );
     }
 
-    // 2. If not loading and no user, show the Login page and other public routes
     if (!user) {
         return (
             <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>}>
@@ -80,19 +71,16 @@ const AppRoutes: React.FC = () => {
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/privacy" element={<PrivacyPolicyPage />} />
                     <Route path="/terms" element={<TermsOfServicePage />} />
-                    {/* Any other public routes can go here */}
                     <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>
             </Suspense>
         );
     }
 
-    // 3. User is logged in, show the app routes
     const canManageResources = P.canManageResources(userData);
 
     return (
         <Routes>
-            {/* All protected routes are now children of MainLayout */}
             <Route element={<MainLayout />}>
                 <Route path="/" element={
                     P.isSuperAdmin(userData) ? <PlatformAnalyticsPage /> :
@@ -101,6 +89,7 @@ const AppRoutes: React.FC = () => {
                     P.isCoach(userData) ? <CoachHubPage /> :
                     <DashboardPage />
                 } />
+                <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/goals" element={<GoalsPage />} />
                 <Route path="/business-gps" element={<BusinessGpsPage />} />
                 <Route path="/daily-tracker" element={<DailyHabitsTrackerPage />} />
@@ -115,8 +104,6 @@ const AppRoutes: React.FC = () => {
                 <Route path="/resource-library/lead-gen" element={<LeadGenPage />} />
                 <Route path="/resource-library/mrea-playbook" element={<MreaPlaybookPage />} />
                 <Route path="/resource-library/:playbookId" element={<PlaybookViewerPage />} />
-
-                {/* --- Role Protected Routes using <ProtectedRoute> --- */}
 
                 <Route path="/client-pipeline" element={
                     <ProtectedRoute isAllowed={P.canManageClientPipeline(userData)}>
@@ -185,11 +172,14 @@ const AppRoutes: React.FC = () => {
                         <CoachingFinancialsPage />
                     </ProtectedRoute>
                 } />
+                
+                {/* SETTINGS: Scoped for Coaches and MC Admins */}
                 <Route path="/admin-settings" element={
-                    <ProtectedRoute isAllowed={P.isSuperAdmin(userData)}>
+                    <ProtectedRoute isAllowed={P.isCoach(userData) || P.isMcAdmin(userData) || P.isSuperAdmin(userData)}>
                         <AdminSettingsPage />
                     </ProtectedRoute>
                 } />
+                
                 <Route path="/habit-settings" element={
                     <ProtectedRoute isAllowed={P.isMcAdmin(userData) || P.isSuperAdmin(userData)}>
                         <HabitTrackerDesignerPage />
@@ -206,7 +196,6 @@ const AppRoutes: React.FC = () => {
                     </ProtectedRoute>
                 } />
                 
-                {/* --- Resource Management Routes --- */}
                 <Route path="/resource-management" element={
                     <ProtectedRoute isAllowed={canManageResources}><ResourceManagementPage /></ProtectedRoute>
                 } />
@@ -217,20 +206,15 @@ const AppRoutes: React.FC = () => {
                     <ProtectedRoute isAllowed={canManageResources}><LearningPathEditorPage /></ProtectedRoute>
                 } />
 
-                {/* --- Public pages also accessible when logged in --- */}
                 <Route path="/privacy" element={<PrivacyPolicyPage />} />
                 <Route path="/terms" element={<TermsOfServicePage />} />
                 
-                {/* Catch-all for logged-in users, redirects to dashboard */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>
     );
 };
 
-/**
-* Main App component wraps everything in context providers.
-*/
 const App: React.FC = () => {
     return (
         <HashRouter>
@@ -238,7 +222,7 @@ const App: React.FC = () => {
                 <GoalProvider>
                     <TransactionsProvider>
                         <NotificationProvider>
-                            <AppRoutes /> {/* This now contains all routing logic */}
+                            <AppRoutes />
                         </NotificationProvider>
                     </TransactionsProvider>
                 </GoalProvider>

@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
@@ -16,6 +18,7 @@ import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore
 import type { Transaction, Goal, Playbook } from '../types';
 import { GoalModal } from '../components/goals/AddGoalModal';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
+import AnnouncementFeed from '../components/dashboard/AnnouncementFeed';
 
 const StatsCard: React.FC<{ gci: number; listings: number }> = ({ gci, listings }) => {
     const stats = [
@@ -230,7 +233,6 @@ const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-6">
               <WelcomeCard />
-              <MyLearning playbooks={playbooks} progress={userData?.playbookProgress || {}}/>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {topGoals.length > 0 ? (
                   topGoals.map(goal => 
@@ -250,8 +252,10 @@ const DashboardPage: React.FC = () => {
                   </>
                 )}
               </div>
+              <MyLearning playbooks={playbooks} progress={userData?.playbookProgress || {}}/>
             </div>
             <div className="lg:col-span-1 space-y-6">
+              <AnnouncementFeed />
               <StatsCard gci={currentUserGCI} listings={currentUserListings} />
               <GpsSummaryCard />
             </div>

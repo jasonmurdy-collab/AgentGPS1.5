@@ -41,6 +41,7 @@ export interface MarketCenter {
   location: string;
   agentCount: number;
   adminIds: string[];
+  calendarEmbedUrl?: string; // Google Calendar Src URL
 }
 
 export interface TeamMember {
@@ -417,4 +418,17 @@ export interface UserSubmission {
   status: 'pending' | 'approved' | 'rejected';
   coachFeedback?: string;
   submittedAt: string; // ISO Date
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  date: string; // ISO Date string
+  authorId: string;
+  authorName: string;
+  marketCenterId: string | null;
+  importance: 'normal' | 'high';
+  mediaType: 'none' | 'image' | 'video';
+  mediaUrl?: string;
 }

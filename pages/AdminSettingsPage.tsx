@@ -16,214 +16,356 @@ import {
     Download,
     FileSpreadsheet,
     Target,
-    Briefcase
+    Briefcase,
+    Megaphone,
+    Send,
+    Edit,
+    Calendar as CalendarIcon,
+    CheckCircle,
+    Image as ImageIcon,
+    Video as VideoIcon,
+    MinusCircle,
+    Info,
+    ExternalLink,
+    HelpCircle
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, P } from '../contexts/AuthContext';
 import { useGoals } from '../contexts/GoalContext';
-import type { MarketCenter, TeamMember, Team } from '../types';
+import type { MarketCenter, TeamMember, Team, Announcement } from '../types';
 import { Spinner } from '../components/ui/Spinner';
 import { downloadCsv } from '../lib/exportUtils';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp, orderBy, query, deleteDoc, doc, where, updateDoc, getDoc } from 'firebase/firestore';
+import { RichTextEditor } from '../components/ui/RichTextEditor';
 
-const PlatformDataExport: React.FC = () => {
-    const { getAllUsers, getMarketCenters, getAllTransactionsForAdmin } = useAuth();
-    const { getAllGoals } = useGoals();
-    const [loadingExport, setLoadingExport] = useState<string | null>(null);
+const CommunicationCenter: React.FC = () => {
+    const { userData, user } = useAuth();
+    const [title, setTitle] = useState('');
+    const [body, setBody] = useState('');
+    const [importance, setImportance] = useState<'normal' | 'high'>('normal');
+    const [mediaType, setMediaType] = useState<'none' | 'image' | 'video'>('none');
+    const [mediaUrl, setMediaUrl] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-    const handleExport = async (collectionName: string) => {
-        setLoadingExport(collectionName);
-        try {
-            let data: any[] = [];
-            let fileName = `agentgps_${collectionName}_${new Date().toISOString().split('T')[0]}`;
+    const canPost = P.isSuperAdmin(userData) || P.isMcAdmin(userData) || P.isCoach(userData) || P.isTeamLeader(userData);
 
-            switch (collectionName) {
-                case 'users':
-                    data = await getAllUsers();
-                    break;
-                case 'transactions':
-                    data = await getAllTransactionsForAdmin();
-                    break;
-                case 'goals':
-                    data = await getAllGoals();
-                    break;
-                case 'marketCenters':
-                    data = await getMarketCenters();
-                    break;
-                default:
-                    throw new Error("Unknown collection");
+    useEffect(() => {
+        const fetchAnnouncements = async () => {
+            if (!userData) return;
+            const db = getFirestoreInstance();
+            if (!db) return;
+            
+            let q;
+            if (userData.marketCenterId) {
+                q = query(
+                    collection(db, 'announcements'), 
+                    where('marketCenterId', '==', userData.marketCenterId),
+                    orderBy('date', 'desc')
+                );
+            } else {
+                q = query(collection(db, 'announcements'), orderBy('date', 'desc'));
             }
 
-            downloadCsv(data, fileName);
+            try {
+                const snap = await getDocs(q);
+                setAnnouncements(snap.docs.map(d => ({id: d.id, ...d.data()} as Announcement)));
+            } catch (error) {
+                console.error("Error fetching announcements:", error);
+            }
+        };
+        fetchAnnouncements();
+    }, [refreshTrigger, userData]);
+
+    const handlePost = async () => {
+        if (!title || !body || !user) return;
+        if (mediaType !== 'none' && !mediaUrl) {
+            alert("Please provide a media URL for the selected media type.");
+            return;
+        }
+        setLoading(true);
+        try {
+            const db = getFirestoreInstance();
+            if (!db) throw new Error("Database not connected");
+            const targetMcId = userData?.marketCenterId || null;
+
+            await addDoc(collection(db, 'announcements'), {
+                title,
+                body,
+                importance,
+                mediaType,
+                mediaUrl: mediaType !== 'none' ? mediaUrl : '',
+                date: serverTimestamp(),
+                authorId: user.uid,
+                authorName: userData?.name || 'Admin',
+                marketCenterId: targetMcId
+            });
+            setTitle('');
+            setBody('');
+            setImportance('normal');
+            setMediaType('none');
+            setMediaUrl('');
+            setRefreshTrigger(prev => prev + 1);
         } catch (error) {
-            console.error(`Export failed for ${collectionName}:`, error);
-            alert(`Failed to export ${collectionName}. Check console for details.`);
+            console.error(error);
+            alert('Failed to post announcement.');
         } finally {
-            setLoadingExport(null);
+            setLoading(false);
         }
     };
 
-    const exportItems = [
-        { id: 'users', label: 'User Roster', icon: Users, description: 'All registered agents, admins, and coaches.' },
-        { id: 'transactions', label: 'Transactions', icon: Briefcase, description: 'Full history of logged deals and commissions.' },
-        { id: 'goals', label: 'Performance Goals', icon: Target, description: 'All annual, quarterly, and weekly goal data.' },
-        { id: 'marketCenters', label: 'Market Centers', icon: Building, description: 'Brokerage details and admin assignments.' },
-    ];
+    const handleDelete = async (id: string) => {
+        if (!window.confirm("Delete this announcement?")) return;
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await deleteDoc(doc(db, 'announcements', id));
+        setRefreshTrigger(prev => prev + 1);
+    };
+
+    if (!canPost) return null;
 
     return (
-        <div className="space-y-4 mt-6 pt-6 border-t border-border">
-            <h2 className="text-2xl font-bold flex items-center gap-3">
-                <Database className="text-accent" /> Export Center
-            </h2>
-            <p className="text-sm text-text-secondary -mt-2">
-                Download your platform data as CSV files for backup or external analysis.
-            </p>
+        <Card className="mt-6">
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Megaphone /> Communication Center</h2>
+            <p className="text-sm text-text-secondary mb-4">Post updates and news to the Dashboard feed for your Market Center.</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {exportItems.map((item) => (
-                    <div key={item.id} className="p-4 bg-background/50 border border-border rounded-xl flex items-center justify-between group hover:border-primary transition-colors">
-                        <div className="flex items-center gap-4">
-                            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                <item.icon size={20} />
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-text-primary">{item.label}</h4>
-                                <p className="text-xs text-text-secondary">{item.description}</p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => handleExport(item.id)}
-                            disabled={loadingExport !== null}
-                            className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-all disabled:opacity-50"
-                            title={`Export ${item.label}`}
+            <div className="space-y-4 mb-8 p-4 bg-background/50 rounded-lg border border-border">
+                <h3 className="font-semibold text-lg">Create New Announcement</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-semibold mb-1">Title</label>
+                        <input 
+                            type="text" 
+                            value={title} 
+                            onChange={e => setTitle(e.target.value)} 
+                            className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary"
+                            placeholder="e.g., Weekly Team Meeting Moved"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold mb-1">Importance</label>
+                        <select 
+                            value={importance} 
+                            onChange={e => setImportance(e.target.value as 'normal' | 'high')}
+                            className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary"
                         >
-                            {loadingExport === item.id ? <Spinner className="w-5 h-5" /> : <Download size={20} />}
+                            <option value="normal">Normal</option>
+                            <option value="high">High (Red Alert)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-semibold mb-2">Media Attachment</label>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                        <button 
+                            type="button"
+                            onClick={() => setMediaType('none')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${mediaType === 'none' ? 'bg-primary text-white border-primary' : 'bg-input text-text-secondary border-border hover:border-primary'}`}
+                        >
+                            <MinusCircle size={14}/> No Media
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => setMediaType('image')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${mediaType === 'image' ? 'bg-primary text-white border-primary' : 'bg-input text-text-secondary border-border hover:border-primary'}`}
+                        >
+                            <ImageIcon size={14}/> Image
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => setMediaType('video')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${mediaType === 'video' ? 'bg-primary text-white border-primary' : 'bg-input text-text-secondary border-border hover:border-primary'}`}
+                        >
+                            <VideoIcon size={14}/> Video (YouTube)
                         </button>
                     </div>
-                ))}
+
+                    {mediaType !== 'none' && (
+                        <div className="animate-in fade-in slide-in-from-top-1">
+                            <label className="block text-xs font-semibold mb-1">
+                                {mediaType === 'image' ? 'Image URL (Direct link to .jpg, .png, .webp)' : 'YouTube URL'}
+                            </label>
+                            <input 
+                                type="url" 
+                                value={mediaUrl} 
+                                onChange={e => setMediaUrl(e.target.value)} 
+                                className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary"
+                                placeholder={mediaType === 'image' ? 'https://example.com/image.jpg' : 'https://youtube.com/watch?v=...'}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <label className="block text-xs font-semibold mb-1">Message Body</label>
+                    <RichTextEditor content={body} onChange={setBody} placeholder="Write your announcement here..." />
+                </div>
+                <button 
+                    onClick={handlePost} 
+                    disabled={loading || !title || !body}
+                    className="flex items-center gap-2 bg-primary text-on-accent px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+                >
+                    {loading ? <Spinner className="w-4 h-4" /> : <Send size={16} />} Post Announcement
+                </button>
             </div>
-        </div>
+
+            <h3 className="font-semibold text-lg mb-2">Recent Posts</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+                {announcements.map(a => (
+                    <div key={a.id} className="flex justify-between items-center p-3 bg-input rounded-md border border-border">
+                        <div>
+                            <p className="font-bold text-sm">
+                                {a.title} 
+                                {a.importance === 'high' && <span className="text-destructive text-xs ml-2">(High)</span>}
+                                {a.mediaType !== 'none' && <span className="text-accent-secondary text-xs ml-2">({a.mediaType})</span>}
+                            </p>
+                            <p className="text-xs text-text-secondary">Posted by {a.authorName}</p>
+                        </div>
+                        <button onClick={() => handleDelete(a.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-full"><Trash2 size={16}/></button>
+                    </div>
+                ))}
+                {announcements.length === 0 && <p className="text-sm text-text-secondary">No recent announcements found.</p>}
+            </div>
+        </Card>
     );
 };
 
-const SignupLinkGenerator: React.FC = () => {
-    const { getAllTeams, getMarketCenters } = useAuth();
-    const [teams, setTeams] = useState<Team[]>([]);
-    const [marketCenters, setMarketCenters] = useState<MarketCenter[]>([]);
+const MarketCenterLeadershipSettings: React.FC = () => {
+    const { userData } = useAuth();
+    const [mcData, setMcData] = useState<MarketCenter | null>(null);
     const [loading, setLoading] = useState(true);
-
-    const [role, setRole] = useState<TeamMember['role']>('agent');
-    const [teamId, setTeamId] = useState('');
-    const [mcId, setMcId] = useState('');
-
-    const [generatedLink, setGeneratedLink] = useState('');
-    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+    const [saving, setSaving] = useState(false);
+    const [calendarUrl, setCalendarUrl] = useState('');
+    const [feedback, setFeedback] = useState('');
+    const [showHelp, setShowHelp] = useState(false);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            const [teamsData, mcData] = await Promise.all([getAllTeams(), getMarketCenters()]);
-            setTeams(teamsData);
-            setMarketCenters(mcData);
+        const fetchMc = async () => {
+            if (!userData?.marketCenterId) return;
+            const db = getFirestoreInstance();
+            if (!db) return;
+            const mcDoc = await getDoc(doc(db, 'marketCenters', userData.marketCenterId));
+            if (mcDoc.exists()) {
+                const data = mcDoc.data() as MarketCenter;
+                setMcData({ id: mcDoc.id, ...data });
+                setCalendarUrl(data.calendarEmbedUrl || '');
+            }
             setLoading(false);
         };
-        fetchData();
-    }, [getAllTeams, getMarketCenters]);
+        fetchMc();
+    }, [userData]);
 
-    const handleGenerate = () => {
-        const baseUrl = `${window.location.origin}${window.location.pathname}#/login`;
-        const params = new URLSearchParams();
-        if (role) params.append('role', role);
-        if (teamId) params.append('teamId', teamId);
-        if (mcId) params.append('mcId', mcId);
-        setGeneratedLink(`${baseUrl}?${params.toString()}`);
+    const handleUrlChange = (val: string) => {
+        // Automatically extract src if an iframe tag is pasted
+        if (val.includes('<iframe')) {
+            const match = val.match(/src=["']([^"']+)["']/);
+            if (match && match[1]) {
+                setCalendarUrl(match[1]);
+                return;
+            }
+        }
+        setCalendarUrl(val);
     };
 
-    const handleCopy = () => {
-        if (!generatedLink) return;
-        navigator.clipboard.writeText(generatedLink);
-        setCopyStatus('copied');
-        setTimeout(() => setCopyStatus('idle'), 2000);
+    const handleSave = async () => {
+        if (!userData?.marketCenterId) return;
+        setSaving(true);
+        setFeedback('');
+        try {
+            const db = getFirestoreInstance();
+            if (!db) return;
+            await updateDoc(doc(db, 'marketCenters', userData.marketCenterId), {
+                calendarEmbedUrl: calendarUrl
+            });
+            setFeedback('Calendar URL updated!');
+            setTimeout(() => setFeedback(''), 3000);
+        } catch (error) {
+            console.error(error);
+            setFeedback('Update failed.');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const inputClasses = "w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-    const labelClasses = "block text-xs font-medium text-text-secondary mb-1";
+    if (loading) return <div className="flex justify-center p-4"><Spinner /></div>;
+    if (!mcData) return null;
 
     return (
-        <div className="space-y-4 mt-6 pt-6 border-t border-border">
-            <h2 className="text-2xl font-bold flex items-center gap-3"><LinkIcon/> Generate Sign-up Link</h2>
-            <p className="text-sm text-text-secondary -mt-2">Create a custom link to onboard new users with a pre-assigned role and affiliations.</p>
-            {loading ? <Spinner /> : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label htmlFor="role" className={labelClasses}>Role</label>
-                        <select id="role" value={role} onChange={(e) => setRole(e.target.value as TeamMember['role'])} className={inputClasses}>
-                            <option value="agent">Agent</option>
-                            <option value="team_leader">Team Leader</option>
-                            <option value="productivity_coach">Productivity Coach</option>
-                            <option value="recruiter">Recruiter</option>
-                            <option value="market_center_admin">MC Admin</option>
-                        </select>
-                    </div>
-                     <div>
-                        <label htmlFor="mc" className={labelClasses}>Market Center (Optional)</label>
-                        <select id="mc" value={mcId} onChange={(e) => setMcId(e.target.value)} className={inputClasses}>
-                            <option value="">None</option>
-                            {marketCenters.map(mc => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
-                        </select>
-                    </div>
-                     <div>
-                        <label htmlFor="team" className={labelClasses}>Team (Optional)</label>
-                        <select id="team" value={teamId} onChange={(e) => setTeamId(e.target.value)} className={inputClasses}>
-                            <option value="">None</option>
-                             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                    </div>
+        <Card className="mt-6">
+            <div className="flex justify-between items-start mb-4">
+                <h2 className="text-2xl font-bold flex items-center gap-2"><CalendarIcon /> Market Center Configuration</h2>
+                <button 
+                    onClick={() => setShowHelp(!showHelp)} 
+                    className="flex items-center gap-1 text-sm font-semibold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                    <HelpCircle size={16} /> Setup Guide
+                </button>
+            </div>
+            
+            <p className="text-sm text-text-secondary mb-6">Manage settings for <strong>{mcData.name}</strong>.</p>
+            
+            {showHelp && (
+                <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <h3 className="font-bold flex items-center gap-2"><Info size={18} className="text-primary"/> How to connect your Google Calendar</h3>
+                    <ol className="text-sm space-y-3 list-decimal list-inside text-text-secondary">
+                        <li>Open your <strong>Google Calendar</strong> on a computer.</li>
+                        <li>Click the <Settings size={14} className="inline"/> icon and go to <strong>Settings</strong>.</li>
+                        <li>On the left sidebar, find <strong>Settings for my calendars</strong> and select your MC calendar.</li>
+                        <li>Under <strong>Access permissions for events</strong>, check <strong>Make available to public</strong>. 
+                            <p className="ml-5 text-[10px] text-destructive font-bold uppercase mt-1 italic">
+                                * Note: If your Google Workspace admin has disabled this, you must ask them to allow "Public Sharing" for your domain.
+                            </p>
+                        </li>
+                        <li>Scroll down to <strong>Integrate calendar</strong> and find the <strong>Embed code</strong>.</li>
+                        <li>Copy the entire code and paste it below. We will extract the link for you!</li>
+                    </ol>
                 </div>
             )}
-             <button onClick={handleGenerate} className="w-full flex items-center justify-center gap-2 bg-accent/20 text-accent font-semibold py-2 px-4 rounded-lg">
-                Generate Link
-            </button>
-            {generatedLink && (
-                 <div className="flex items-center gap-2 bg-input p-2 rounded-lg">
-                    <input type="text" readOnly value={generatedLink} className="flex-1 bg-transparent text-sm text-text-primary outline-none" />
+
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Google Calendar Embed URL or Code</label>
+                    <textarea 
+                        value={calendarUrl} 
+                        onChange={e => handleUrlChange(e.target.value)} 
+                        className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary min-h-[80px] font-mono text-xs"
+                        placeholder="Paste <iframe ...> code or the src URL here..."
+                    />
+                    <div className="flex items-start gap-2 mt-2">
+                        <Info size={14} className="text-text-secondary mt-0.5" />
+                        <p className="text-[11px] text-text-secondary">
+                            This calendar will be visible to every agent in your Market Center. 
+                            Ensure the calendar's <strong>Public Sharing</strong> is turned on in Google, or agents will only see a blank screen.
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center justify-end gap-4">
+                    {feedback && <span className="text-sm text-success flex items-center gap-1"><CheckCircle size={14}/> {feedback}</span>}
                     <button 
-                        onClick={handleCopy} 
-                        className="p-2 rounded-md text-text-secondary hover:bg-accent/20 hover:text-text-primary disabled:cursor-not-allowed transition-colors"
+                        onClick={handleSave} 
+                        disabled={saving}
+                        className="bg-primary text-on-accent px-4 py-2 rounded-lg font-semibold min-w-[120px]"
                     >
-                        {copyStatus === 'copied' ? (
-                            <span className="text-xs font-semibold text-accent">Copied!</span>
-                        ) : (
-                            <ClipboardCopy size={20} />
-                        )}
+                        {saving ? <Spinner className="mx-auto" /> : 'Save Calendar Link'}
                     </button>
                 </div>
-            )}
-        </div>
+            </div>
+        </Card>
     );
 };
 
 const MarketCenterManagement: React.FC = () => {
-    const { 
-        getMarketCenters, 
-        createMarketCenter, 
-        deleteMarketCenter,
-        assignMcAdmin,
-        removeMcAdmin,
-        getUsersByIds,
-    } = useAuth();
-    
+    const { getMarketCenters, createMarketCenter, deleteMarketCenter, assignMcAdmin, removeMcAdmin, getUsersByIds } = useAuth();
     const [marketCenters, setMarketCenters] = useState<MarketCenter[]>([]);
     const [adminsMap, setAdminsMap] = useState<Record<string, TeamMember[]>>({});
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newMcName, setNewMcName] = useState('');
     const [newMcNumber, setNewMcNumber] = useState('');
     const [newMcLocation, setNewMcLocation] = useState('');
     const [newMcAgentCount, setNewMcAgentCount] = useState('');
-
     const [addAdminEmails, setAddAdminEmails] = useState<Record<string, string>>({});
     
     const fetchMarketCenters = useCallback(async () => {
@@ -231,216 +373,111 @@ const MarketCenterManagement: React.FC = () => {
         try {
             const mcs = await getMarketCenters();
             setMarketCenters(mcs);
-            
             const allAdminIds = [...new Set(mcs.flatMap(mc => mc.adminIds))];
             if (allAdminIds.length > 0) {
                 const adminUsers = await getUsersByIds(allAdminIds);
                 const adminUserLookup = new Map(adminUsers.map(user => [user.id, user]));
-
                 const newAdminsMap = mcs.reduce((acc, mc) => {
-                    acc[mc.id] = mc.adminIds
-                        .map(adminId => adminUserLookup.get(adminId))
-                        .filter((user): user is TeamMember => !!user);
+                    acc[mc.id] = mc.adminIds.map(adminId => adminUserLookup.get(adminId)).filter((user): user is TeamMember => !!user);
                     return acc;
                 }, {} as Record<string, TeamMember[]>);
-
                 setAdminsMap(newAdminsMap);
             } else {
                 setAdminsMap({});
             }
-
         } catch (e) {
-            setError('Failed to load market centers.');
+            console.error(e);
         } finally {
             setLoading(false);
         }
     }, [getMarketCenters, getUsersByIds]);
     
-    useEffect(() => {
-        fetchMarketCenters();
-    }, [fetchMarketCenters]);
+    useEffect(() => { fetchMarketCenters(); }, [fetchMarketCenters]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMcName || !newMcNumber || !newMcLocation || !newMcAgentCount) return;
         setLoading(true);
-        const agentCountNum = parseInt(newMcAgentCount, 10);
-        if(isNaN(agentCountNum)) {
-            alert('Agent count must be a number.');
-            setLoading(false);
-            return;
-        }
-
-        await createMarketCenter({
-            name: newMcName,
-            marketCenterNumber: newMcNumber,
-            location: newMcLocation,
-            agentCount: agentCountNum,
-        });
-        
-        setNewMcName('');
-        setNewMcNumber('');
-        setNewMcLocation('');
-        setNewMcAgentCount('');
+        await createMarketCenter({ name: newMcName, marketCenterNumber: newMcNumber, location: newMcLocation, agentCount: parseInt(newMcAgentCount, 10) || 0 });
         setIsCreateModalOpen(false);
         fetchMarketCenters();
     };
 
     const handleDelete = async (mcId: string) => {
-        if (window.confirm("Are you sure? This will delete the market center but will NOT delete its users.")) {
+        if (window.confirm("Are you sure? This will delete the market center.")) {
             setLoading(true);
             await deleteMarketCenter(mcId);
             fetchMarketCenters();
         }
     };
     
-    const handleAddAdmin = async (e: React.FormEvent, mcId: string) => {
-        e.preventDefault();
-        const email = addAdminEmails[mcId];
-        if(!email) return;
-        setLoading(true);
-        try {
-            await assignMcAdmin(email, mcId);
-            setAddAdminEmails(prev => ({ ...prev, [mcId]: '' }));
-            fetchMarketCenters();
-        } catch(error) {
-            if (error instanceof Error) {
-                alert(error.message);
-            } else {
-                alert('An unknown error occurred.');
-            }
-            setLoading(false);
-        }
-    };
-
-    const handleRemoveAdmin = async (userId: string, mcId: string) => {
-        if(window.confirm("Are you sure you want to remove this user as an MC Admin? Their role will be reverted to Agent.")) {
-            setLoading(true);
-            await removeMcAdmin(userId, mcId);
-            fetchMarketCenters();
-        }
-    };
-
-
     if (loading) return <Spinner />;
-    if (error) return <p className="text-destructive">{error}</p>;
-
-    const inputClasses = "w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-    const labelClasses = "block text-xs font-medium text-text-secondary mb-1";
-
 
     return (
         <div className="space-y-4 mt-6 pt-6 border-t border-border">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold flex items-center gap-3"><Building/> Market Center Management</h2>
-                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 text-sm bg-primary/10 text-primary font-semibold py-1.5 px-3 rounded-lg hover:bg-primary/20"><Plus size={16}/> Create Market Center</button>
+                <h2 className="text-2xl font-bold flex items-center gap-3"><Building/> Market Center Management (Global)</h2>
+                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 text-sm bg-primary/10 text-primary font-semibold py-1.5 px-3 rounded-lg hover:bg-primary/20"><Plus size={16}/> Create MC</button>
             </div>
             {marketCenters.map(mc => (
                 <Card key={mc.id} className="bg-background/50">
                     <div className="flex justify-between items-start">
                         <div>
                             <h4 className="text-lg font-bold">{mc.name}</h4>
-                            <p className="text-sm text-text-secondary">MC #{mc.marketCenterNumber} &bull; {mc.location} &bull; ~{mc.agentCount} Agents</p>
+                            <p className="text-sm text-text-secondary">MC #{mc.marketCenterNumber} &bull; {mc.location}</p>
                         </div>
                         <button onClick={() => handleDelete(mc.id)} className="p-1.5 text-destructive hover:bg-destructive/10 rounded-full"><Trash2 size={16}/></button>
                     </div>
-                    <div className="mt-4">
-                        <h5 className="text-sm font-semibold mb-2">MC Admins</h5>
-                        <div className="space-y-2">
-                           {(adminsMap[mc.id] || []).map(admin => (
-                               <div key={admin.id} className="flex justify-between items-center p-2 bg-surface rounded-lg">
-                                   <p className="text-sm">{admin.name} ({admin.email})</p>
-                                   <button onClick={() => handleRemoveAdmin(admin.id, mc.id)} className="p-1 text-destructive hover:bg-destructive/10 rounded-full"><X size={14}/></button>
-                               </div>
-                           ))}
-                           {(adminsMap[mc.id] || []).length === 0 && <p className="text-xs text-text-secondary">No admins assigned.</p>}
-                        </div>
-                         <form onSubmit={(e) => handleAddAdmin(e, mc.id)} className="mt-4 pt-4 border-t border-border flex items-end gap-2">
-                            <div className="flex-grow">
-                                <label className="text-xs font-medium text-text-secondary">Add Admin by Email</label>
-                                <input 
-                                    type="email"
-                                    placeholder="user@example.com"
-                                    value={addAdminEmails[mc.id] || ''}
-                                    onChange={e => setAddAdminEmails(prev => ({...prev, [mc.id]: e.target.value}))}
-                                    className="w-full bg-input border border-border rounded-md px-3 py-1.5 text-text-primary text-sm"
-                                />
-                            </div>
-                            <button type="submit" className="p-2 bg-primary/20 text-primary rounded-md font-semibold text-sm"><UserPlus size={16}/></button>
-                         </form>
-                    </div>
                 </Card>
             ))}
-
-            {isCreateModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="create-mc-title">
-                    <Card className="w-full max-w-md">
-                         <form onSubmit={handleCreate} className="space-y-4">
-                            <h3 id="create-mc-title" className="text-lg font-bold mb-4">Create New Market Center</h3>
-                            <div>
-                                <label htmlFor="mcName" className={labelClasses}>Brokerage Name</label>
-                                <input id="mcName" type="text" value={newMcName} onChange={(e) => setNewMcName(e.target.value)} placeholder="e.g., KW Ignite Realty" className={inputClasses} required />
-                            </div>
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="mcNumber" className={labelClasses}>Market Center Number</label>
-                                    <input id="mcNumber" type="text" value={newMcNumber} onChange={(e) => setNewMcNumber(e.target.value)} placeholder="e.g., 1234" className={inputClasses} required />
-                                </div>
-                                <div>
-                                    <label htmlFor="mcAgentCount" className={labelClasses}>Rough Agent Count</label>
-                                    <input id="mcAgentCount" type="number" value={newMcAgentCount} onChange={(e) => setNewMcAgentCount(e.target.value)} placeholder="e.g., 150" className={inputClasses} required />
-                                </div>
-                            </div>
-                            <div>
-                                <label htmlFor="mcLocation" className={labelClasses}>Location Details</label>
-                                <input id="mcLocation" type="text" value={newMcLocation} onChange={(e) => setNewMcLocation(e.target.value)} placeholder="e.g., City, State/Province" className={inputClasses} required />
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-4">
-                                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="py-2 px-4 rounded-lg text-text-secondary hover:bg-primary/10">Cancel</button>
-                                <button type="submit" className="py-2 px-4 rounded-lg bg-primary text-on-accent font-semibold">Create</button>
-                            </div>
-                         </form>
-                    </Card>
-                </div>
-            )}
         </div>
     );
 };
 
-
 const AdminSettingsPage: React.FC = () => {
-  return (
-    <div className="h-full flex flex-col">
-      <header className="p-4 sm:p-6 lg:p-8">
-        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
-          <SlidersHorizontal className="text-accent-secondary" size={48} />
-          Admin Settings
-        </h1>
-        <p className="text-lg text-text-secondary mt-1">Global configuration for the AgentGPS platform.</p>
-      </header>
+    const { userData } = useAuth();
+    const isSuperAdmin = P.isSuperAdmin(userData);
+    const isLeadership = P.isMcAdmin(userData) || P.isCoach(userData);
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <Card>
-          <h2 className="text-2xl font-bold mb-4">Global Settings</h2>
-          <div className="space-y-6">
-            <Link to="/habit-settings" className="block p-6 bg-surface border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
-              <div className="flex items-center gap-3 mb-2">
-                <Settings className="text-primary" />
-                <h3 className="text-lg font-bold text-text-primary">Habit Tracker Settings</h3>
-              </div>
-              <p className="text-sm text-text-secondary">
-                Configure the default activities and point values for the Daily Habits Tracker across the entire platform.
-              </p>
-            </Link>
-            <MarketCenterManagement />
-            <SignupLinkGenerator />
-            <PlatformDataExport />
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
+    return (
+        <div className="h-full flex flex-col">
+            <header className="p-4 sm:p-6 lg:p-8">
+                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
+                    <SlidersHorizontal className="text-accent-secondary" size={48} />
+                    Settings
+                </h1>
+                <p className="text-lg text-text-secondary mt-1">
+                    {isSuperAdmin ? 'Platform-wide configuration and administration.' : 'Market Center management and communication center.'}
+                </p>
+            </header>
+
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
+                <Card>
+                    <div className="space-y-6">
+                        {isLeadership && (
+                            <>
+                                <MarketCenterLeadershipSettings />
+                                <CommunicationCenter />
+                            </>
+                        )}
+                        
+                        {isSuperAdmin && (
+                            <>
+                                <Link to="/habit-settings" className="block p-6 bg-surface border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Settings className="text-primary" />
+                                        <h3 className="text-lg font-bold text-text-primary">Habit Tracker Settings</h3>
+                                    </div>
+                                    <p className="text-sm text-text-secondary">Configure platform-wide default activities.</p>
+                                </Link>
+                                <MarketCenterManagement />
+                            </>
+                        )}
+                    </div>
+                </Card>
+            </div>
+        </div>
+    );
 };
 
 export default AdminSettingsPage;

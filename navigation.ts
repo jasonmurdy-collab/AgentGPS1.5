@@ -1,19 +1,17 @@
-
-
 import {
     LayoutDashboard, Target, Users, UserCircle, Compass, Briefcase, // Changed Feather to Compass
     ClipboardList, BookOpen, Rocket, DollarSign, BarChartHorizontal,
     Settings, UserSearch, Network, PieChart, UserCheck, Building,
-    Edit3, ListTodo
+    Edit3, ListTodo, Calendar as CalendarIcon
 } from 'lucide-react';
 
 // 1. DEFINE ALL POSSIBLE NAV ITEMS
-// Now you only need to change a path or icon in ONE place.
 const navItems = {
     // Core
     DASHBOARD: { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
+    CALENDAR: { name: 'Calendar', icon: CalendarIcon, path: '/calendar' },
     GOALS: { name: 'Goals', icon: Target, path: '/goals' },
-    BUSINESS_GPS: { name: 'Business GPS', icon: Compass, path: '/business-gps' }, // Changed Feather to Compass
+    BUSINESS_GPS: { name: 'Business GPS', icon: Compass, path: '/business-gps' },
     CLIENT_PIPELINE: { name: 'Client Pipeline', icon: Users, path: '/client-pipeline' },
     DAILY_TRACKER: { name: 'Daily Tracker', icon: ClipboardList, path: '/daily-tracker' },
     TODOS: { name: 'To-Do List', icon: ListTodo, path: '/todos' },
@@ -23,7 +21,7 @@ const navItems = {
     // Growth & Learning
     GROWTH_ARCHITECT: { name: 'Growth Architect', icon: Network, path: '/growth-architect' },
     MY_LAUNCHPAD: { name: 'My Launchpad', icon: Rocket, path: '/my-launchpad' },
-    RESOURCE_LIBRARY: { name: 'My Growth', icon: BookOpen, path: '/resource-library' }, // Renamed to 'My Growth' for Agent
+    RESOURCE_LIBRARY: { name: 'My Growth', icon: BookOpen, path: '/resource-library' },
     RESOURCE_LIBRARY_DEFAULT: { name: 'Resource Library', icon: BookOpen, path: '/resource-library' },
 
     // Team & Community
@@ -40,32 +38,34 @@ const navItems = {
 
     // Coach
     COACH_GOALS: { name: 'My Goals', icon: Target, path: '/coach-goals' },
-    COACH_GPS: { name: 'My Business GPS', icon: Compass, path: '/coach-gps' }, // Changed Feather to Compass
+    COACH_GPS: { name: 'My Business GPS', icon: Compass, path: '/coach-gps' },
     COACH_DAILY_TRACKER: { name: 'My Daily Tracker', icon: ClipboardList, path: '/coach-daily-tracker' },
     COACHING_FINANCIALS: { name: 'Coaching Financials', icon: PieChart, path: '/coaching-financials' },
     COACHING_HUB: { name: 'Coaching Hub', icon: Briefcase, path: '/' },
     AGENT_TRANSACTIONS: { name: 'Agent Transactions', icon: BarChartHorizontal, path: '/agent-transactions' },
     TALENT_DEV_CENTER: { name: 'Talent Development Center', icon: Edit3, path: '/resource-management' },
+    COACH_SETTINGS: { name: 'MC Settings', icon: Settings, path: '/admin-settings' },
 
     // MC Admin
     AGENT_ARCHITECT: { name: 'Agent Architect', icon: Network, path: '/agent-architect' },
     MC_HUB: { name: 'Market Center Hub', icon: Building, path: '/' },
     AGENT_ASSIGNMENTS: { name: 'Agent Assignments', icon: UserCheck, path: '/agent-assignments' },
     HABIT_DESIGNER: { name: 'Habit Tracker Designer', icon: Settings, path: '/habit-settings' },
+    MC_SETTINGS: { name: 'MC Settings', icon: Settings, path: '/admin-settings' },
 
     // Super Admin
     ANALYTICS: { name: 'Analytics', icon: PieChart, path: '/' },
     USER_ROSTER: { name: 'User Roster', icon: Users, path: '/user-management' },
-    MC_SETTINGS: { name: 'Market Centers', icon: Building, path: '/admin-settings' },
+    ADMIN_SETTINGS: { name: 'Admin Settings', icon: Settings, path: '/admin-settings' },
 };
 
 // 2. COMPOSE ROLE-BASED NAVIGATION
-// Now you just pick from the items you defined above.
 export const agentNavSections = [
     {
         title: 'Core Tools',
         items: [
             navItems.DASHBOARD,
+            navItems.CALENDAR,
             navItems.GOALS,
             navItems.BUSINESS_GPS,
             navItems.CLIENT_PIPELINE,
@@ -80,7 +80,7 @@ export const agentNavSections = [
         items: [
             navItems.GROWTH_ARCHITECT,
             navItems.MY_LAUNCHPAD,
-            navItems.RESOURCE_LIBRARY, // Uses the 'My Growth' label
+            navItems.RESOURCE_LIBRARY,
         ]
     },
     {
@@ -94,6 +94,7 @@ export const teamLeaderNavSections = [
         title: 'My Business',
         items: [
             navItems.DASHBOARD,
+            navItems.CALENDAR,
             navItems.GOALS,
             navItems.BUSINESS_GPS,
             navItems.FINANCIALS,
@@ -126,6 +127,7 @@ export const recruiterNavSections = [
         title: 'Recruiting Hub',
         items: [
             navItems.DASHBOARD,
+            navItems.CALENDAR,
             navItems.GOALS,
             navItems.RECRUITER_DAILY_TRACKER,
             navItems.TODOS,
@@ -157,6 +159,7 @@ export const coachNavSections = [
         title: 'Coaching Tools',
         items: [
             navItems.COACHING_HUB,
+            navItems.CALENDAR,
             navItems.AGENT_TRANSACTIONS,
             navItems.AGENT_HABIT_LOGS,
             navItems.PERFORMANCE_LOGS,
@@ -164,11 +167,12 @@ export const coachNavSections = [
         ]
     },
     {
-        title: 'Resources',
+        title: 'Resources & Management',
         items: [
             navItems.RECRUITMENT_HUB,
             navItems.RESOURCE_LIBRARY_DEFAULT,
             navItems.TALENT_DEV_CENTER,
+            navItems.COACH_SETTINGS,
         ]
     },
 ];
@@ -178,8 +182,10 @@ export const mcAdminNavSections = [
         title: 'Market Center',
         items: [
             navItems.MC_HUB,
+            navItems.CALENDAR,
             navItems.AGENT_ASSIGNMENTS,
             navItems.PERFORMANCE_LOGS,
+            navItems.MC_SETTINGS,
         ]
     },
     {
@@ -204,8 +210,9 @@ export const superAdminNavSections = [
         title: 'Platform Management',
         items: [
             navItems.ANALYTICS,
+            navItems.CALENDAR,
             navItems.USER_ROSTER,
-            navItems.MC_SETTINGS,
+            navItems.ADMIN_SETTINGS,
             navItems.HABIT_DESIGNER,
         ]
     }
