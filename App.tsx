@@ -1,3 +1,4 @@
+
 import React, { Suspense, lazy } from 'react';
 import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { GoalProvider } from './contexts/GoalContext';
@@ -53,6 +54,10 @@ const ClientPipelinePage = lazy(() => import('./pages/ClientPipelinePage'));
 const TodoPage = lazy(() => import('./pages/TodoPage'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 
+// New Hubs
+const BusinessHubPage = lazy(() => import('./pages/BusinessHubPage'));
+const TrainingHubPage = lazy(() => import('./pages/TrainingHubPage'));
+
 const AppRoutes: React.FC = () => {
     const { user, userData, loading } = useAuth();
 
@@ -105,6 +110,10 @@ const AppRoutes: React.FC = () => {
                 <Route path="/resource-library/mrea-playbook" element={<MreaPlaybookPage />} />
                 <Route path="/resource-library/:playbookId" element={<PlaybookViewerPage />} />
 
+                {/* Hub Routes */}
+                <Route path="/business-hub" element={<BusinessHubPage />} />
+                <Route path="/training-hub" element={<TrainingHubPage />} />
+
                 <Route path="/client-pipeline" element={
                     <ProtectedRoute isAllowed={P.canManageClientPipeline(userData)}>
                         <ClientPipelinePage />
@@ -132,7 +141,7 @@ const AppRoutes: React.FC = () => {
                     </ProtectedRoute>
                 } />
                 <Route path="/recruitment-hub" element={
-                    <ProtectedRoute isAllowed={P.isCoach(userData)}><RecruitmentHubPage /></ProtectedRoute>
+                    <ProtectedRoute isAllowed={P.isRecruiter(userData) || P.isCoach(userData) || P.isMcAdmin(userData)}><RecruitmentHubPage /></ProtectedRoute>
                 } />
                 <Route path="/team-hub" element={
                     <ProtectedRoute isAllowed={P.isTeamLeader(userData)}><CoachHubPage /></ProtectedRoute>
