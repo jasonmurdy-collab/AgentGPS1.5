@@ -140,8 +140,11 @@ export const processUserDoc = (doc: DocumentSnapshot): TeamMember => {
         assignedLearningPathId: data.assignedLearningPathId || null,
         newAgentResources: data.newAgentResources || {},
         onboardingChecklistProgress: data.onboardingChecklistProgress || [],
-// Fix: Add zapierApiKey to ensure the processed user object matches the TeamMember type.
         zapierApiKey: data.zapierApiKey,
+        // Added Twilio fields for processing
+        twilioSid: data.twilioSid || '',
+        twilioToken: data.twilioToken || '',
+        twilioNumber: data.twilioNumber || '',
     };
 };
 

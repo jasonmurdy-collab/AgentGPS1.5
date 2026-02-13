@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth, P } from '../contexts/AuthContext';
@@ -12,7 +11,7 @@ import { AssignHomeworkModal } from '../components/coach/AssignHomeworkModal';
 import { ChangeRoleModal } from '../components/coach/ChangeRoleModal';
 import type { Goal, TeamMember, NewAgentHomework, DailyTrackerData, Playbook, PerformanceLog, DiscoveryGuideData, OrgBlueprint, Transaction, HabitTrackerTemplate, HabitActivitySetting } from '../types';
 import { EconomicModelData } from './BusinessGpsPage';
-import { LayoutDashboard, Target, BookOpen, ClipboardList, UserCheck, MessageSquare, CheckSquare, Star, ArrowLeft, Plus, GraduationCap, Trash2, Compass, Network, BarChart, Users, Hash, ArrowDown, AlertTriangle, DollarSign, BarChart2, ClipboardSignature, FileCheck, Search, Home, Briefcase, ShieldCheck, PhoneCall, MapPin, Settings2, Globe, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Target, BookOpen, ClipboardList, UserCheck, MessageSquare, CheckSquare, Star, ArrowLeft, Plus, GraduationCap, Trash2, Compass, Network, BarChart, Users, Hash, ArrowDown, AlertTriangle, DollarSign, BarChart2, ClipboardSignature, FileCheck, Search, Home, Briefcase, ShieldCheck, PhoneCall, MapPin, Settings2, Globe, ChevronDown, PlusCircle } from 'lucide-react';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 
@@ -186,25 +185,13 @@ const ReadOnlyEconomicModel: React.FC<{ data: EconomicModelData; calculations: a
 };
 
 // --- ARCHITECT TAB COMPONENTS ---
-const ROLE_CATEGORIES = {
-  Administrative: [
-    { name: 'Administrative Assistant', icon: ClipboardSignature },
-    { name: 'Transaction Coordinator', icon: FileCheck },
-    { name: 'Executive Assistant', icon: ShieldCheck },
-  ],
-  Sales: [
-    { name: 'Buyer\'s Agent', icon: Search },
-    { name: 'Listing Specialist', icon: Home },
-    { name: 'Inside Sales Agent (ISA)', icon: PhoneCall },
-    { name: 'Outside Sales Agent (OSA)', icon: MapPin },
-  ],
-  Leadership: [
-    { name: 'Director of Operations', icon: Settings2 },
-    { name: 'Expansion Director', icon: Globe },
-    { name: 'CEO / General Manager', icon: Briefcase },
-  ]
-};
-const ALL_ROLES = Object.values(ROLE_CATEGORIES).flat();
+const ARCHITECT_ROLES_AVAILABLE = [
+  { name: 'Administrative Assistant', icon: ClipboardSignature },
+  { name: 'Transaction Coordinator', icon: FileCheck },
+  { name: 'Buyer\'s Agent', icon: Search },
+  { name: 'Listing Specialist', icon: Home },
+  { name: 'CEO / General Manager', icon: Briefcase },
+];
 
 const ArchitectDisplay: React.FC<{ blueprint: OrgBlueprint | null; agent: TeamMember; kpis: { gci: number, transactions: number } }> = ({ blueprint, agent, kpis }) => (
     <div className="text-center">
@@ -225,7 +212,7 @@ const ArchitectDisplay: React.FC<{ blueprint: OrgBlueprint | null; agent: TeamMe
             <div className="flex justify-center flex-wrap gap-4 px-4">
                 {blueprint && blueprint.nodes.length > 0 && <div className="absolute top-0 left-1/2 h-0.5 bg-border" style={{ width: `calc(100% - ${(100/blueprint.nodes.length)}%)`, transform: 'translateX(-50%)' }}></div>}
                 {blueprint?.nodes.map(node => {
-                    const roleInfo = ALL_ROLES.find(r => r.name === node.role);
+                    const roleInfo = ARCHITECT_ROLES_AVAILABLE.find(r => r.name === node.role);
                     const Icon = roleInfo?.icon || Network;
                     return (
                         <div key={node.id} className="relative pt-5">
@@ -247,22 +234,24 @@ const ArchitectDisplay: React.FC<{ blueprint: OrgBlueprint | null; agent: TeamMe
 );
 
 // --- ACTIVITY LOGS TAB COMPONENTS ---
-const defaultHabitActivities: HabitActivitySetting[] = [ { id: 'calls', name: 'Calls Made', worth: 1, unit: 'call' }, { id: 'doorsKnocked', name: 'Doors Knocked', worth: 1, unit: 'knock' }, { id: 'knocksAnswered', name: 'Knocks Answered', worth: 2, unit: 'answer' }, { id: 'contacts', name: 'Meaningful Contacts', worth: 2, unit: 'contact' }, { id: 'listingAptsSet', name: 'Listing Appointments Set', worth: 10, unit: 'appt' }, { id: 'buyerAptsSet', name: 'Buyer Appointments Set', worth: 5, unit: 'appt' }, { id: 'lenderAptsSet', name: 'Lender Appointments Set', worth: 3, unit: 'appt' }, { id: 'agreements', name: 'Agreements Signed', worth: 20, unit: 'agreement' }, { id: 'notes', name: 'Handwritten Notes', worth: 2, unit: 'note' }, { id: 'closings', name: 'Closings', worth: 50, unit: 'closing' }, { id: 'open_house_hours', name: 'Open House Hours', worth: 10, unit: 'hour' }, { id: 'social_posts', name: 'Social Media Posts', worth: 2, unit: 'post' }, { id: 'video_content', name: 'Video Content Created', worth: 5, unit: 'video' }, { id: 'new_leads', name: 'New Leads Added', worth: 1, unit: 'lead' }, ];
+const DEFAULT_HABIT_ACTIVITIES: HabitActivitySetting[] = [ { id: 'calls', name: 'Calls Made', worth: 1, unit: 'call' }, { id: 'doorsKnocked', name: 'Doors Knocked', worth: 1, unit: 'knock' }, { id: 'knocksAnswered', name: 'Knocks Answered', worth: 2, unit: 'answer' }, { id: 'contacts', name: 'Meaningful Contacts', worth: 2, unit: 'contact' }, { id: 'listingAptsSet', name: 'Listing Appointments Set', worth: 10, unit: 'appt' }, { id: 'buyerAptsSet', name: 'Buyer Appointments Set', worth: 5, unit: 'appt' }, { id: 'lenderAptsSet', name: 'Lender Appointments Set', worth: 3, unit: 'appt' }, { id: 'agreements', name: 'Agreements Signed', worth: 20, unit: 'agreement' }, { id: 'notes', name: 'Handwritten Notes', worth: 2, unit: 'note' }, { id: 'closings', name: 'Closings', worth: 50, unit: 'closing' }, { id: 'open_house_hours', name: 'Open House Hours', worth: 10, unit: 'hour' }, { id: 'social_posts', name: 'Social Media Posts', worth: 2, unit: 'post' }, { id: 'video_content', name: 'Video Content Created', worth: 5, unit: 'video' }, { id: 'new_leads', name: 'New Leads Added', worth: 1, unit: 'lead' }, ];
 
-const getMetricValue = (log: DailyTrackerData, activityId: string): number => {
+// Fix: Added getMetricValue helper to retrieve metric values from log data.
+const getMetricValue = (data: DailyTrackerData | null, activityId: string): number => {
+    if (!data) return 0;
     switch(activityId) {
-        case 'calls': return log.dials || 0;
-        case 'doorsKnocked': return log.doorsKnocked || 0;
-        case 'knocksAnswered': return log.knocksAnswered || 0;
-        case 'contacts': return log.prospectingTotals?.contacts || 0;
-        case 'listingAptsSet': return log.prospectingTotals?.listingAptsSet || 0;
-        case 'buyerAptsSet': return log.prospectingTotals?.buyerAptsSet || 0;
-        case 'lenderAptsSet': return log.prospectingTotals?.lenderAptsSet || 0;
-        default: return log.pointsActivities?.[activityId] || 0;
+        case 'calls': return data.dials || 0;
+        case 'doorsKnocked': return data.doorsKnocked || 0;
+        case 'knocksAnswered': return data.knocksAnswered || 0;
+        case 'contacts': return data.prospectingTotals?.contacts || 0;
+        case 'listingAptsSet': return data.prospectingTotals?.listingAptsSet || 0;
+        case 'buyerAptsSet': return data.prospectingTotals?.buyerAptsSet || 0;
+        case 'lenderAptsSet': return data.prospectingTotals?.lenderAptsSet || 0;
+        default: return data.pointsActivities?.[activityId] || 0;
     }
 };
 
-const calculateTotalPoints = (data: DailyTrackerData | null, settings: HabitTrackerTemplate | null): number => {
+const calculateTotalPointsForDetail = (data: DailyTrackerData | null, settings: HabitTrackerTemplate | null): number => {
     if (!data || !settings?.activities) return 0;
     return settings.activities.reduce((total, activity) => {
         const count = getMetricValue(data, activity.id);
@@ -270,8 +259,9 @@ const calculateTotalPoints = (data: DailyTrackerData | null, settings: HabitTrac
     }, 0);
 };
 
+// Fix: Added LogDetailView component which was missing.
 const LogDetailView: React.FC<{ log: DailyTrackerData, settings: HabitTrackerTemplate }> = ({ log, settings }) => {
-    const totalPoints = calculateTotalPoints(log, settings);
+    const totalPoints = calculateTotalPointsForDetail(log, settings);
     const aptsSet = getMetricValue(log, 'listingAptsSet') + getMetricValue(log, 'buyerAptsSet') + getMetricValue(log, 'lenderAptsSet');
     const contacts = getMetricValue(log, 'contacts');
 
@@ -301,6 +291,14 @@ const LogDetailView: React.FC<{ log: DailyTrackerData, settings: HabitTrackerTem
         </div>
     );
 };
+
+const TabButton: React.FC<{ active: boolean; label: string; icon: React.ElementType; onClick: () => void; }> = ({ active, label, icon: Icon, onClick }) => (
+    <button onClick={onClick} className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all ${active ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary'}`}>{<Icon size={16} />} {label}</button>
+);
+
+const KpiDisplay: React.FC<{ label: string; value: string | number; }> = ({ label, value }) => (
+    <div className="bg-surface p-4 rounded-2xl text-center border border-border"><p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">{label}</p><p className="text-2xl font-black text-text-primary">{typeof value === 'number' ? value.toLocaleString() : value}</p></div>
+);
 
 // --- AGENT DETAIL PAGE COMPONENT ---
 const AgentDetailPage: React.FC = () => {
@@ -391,7 +389,7 @@ const AgentDetailPage: React.FC = () => {
             if (settingsDoc?.exists()) {
                 setHabitSettings({id: settingsDoc.id, ...settingsDoc.data() } as HabitTrackerTemplate);
             } else {
-                setHabitSettings({ id: 'fallback', name: 'Default Agent', activities: defaultHabitActivities });
+                setHabitSettings({ id: 'fallback', name: 'Default Agent', activities: DEFAULT_HABIT_ACTIVITIES });
             }
 
         } catch (err: any) {
@@ -438,45 +436,143 @@ const AgentDetailPage: React.FC = () => {
     const handleChangeRole = async (newRole: TeamMember['role']) => { if (!agent) return; await updateUserRole(agent.id, newRole); fetchData(); setIsChangeRoleModalOpen(false); };
     const handleRemoveAgent = async () => { if (!agent) return; if (window.confirm(`Are you sure you want to remove ${agent.name} from your program/team?`)) { await removeAgentFromTeam(agent.id); navigate('/team-hub'); } };
 
-    const TabButton: React.FC<{ tabId: string; label: string; icon: React.ElementType; }> = ({ tabId, label, icon: Icon }) => (
-        <button onClick={() => setActiveTab(tabId)} className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === tabId ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary'}`}>{<Icon size={16} />} {label}</button>
-    );
-
     if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-10 h-10"/></div>;
     if (error || !agent) return <Card className="m-8 text-center py-12 bg-destructive-surface border-destructive text-destructive"><h2 className="text-2xl font-bold">Error</h2><p className="mt-2">{error || "Agent not found."}</p></Card>;
 
     return (
         <div className="h-full flex flex-col">
             <header className="p-4 sm:p-6 lg:p-8">
-                <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline mb-4"><ArrowLeft size={16}/> Back to Hub</button>
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm font-bold text-primary hover:underline mb-6"><ArrowLeft size={16}/> BACK TO PREVIOUS</button>
                 <div className="flex justify-between items-center flex-wrap gap-4">
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-on-accent font-bold text-3xl flex-shrink-0">{agent.name.charAt(0).toUpperCase()}</div>
+                        <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-on-accent font-black text-3xl flex-shrink-0 shadow-lg shadow-primary/20">{agent.name.charAt(0).toUpperCase()}</div>
                         <div>
                             <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">{agent.name}</h1>
-                            <p className="text-lg text-text-secondary -mt-1">{agent.role?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} | {agent.email}</p>
+                            <p className="text-lg text-text-secondary -mt-1 font-medium">{agent.role?.replace(/_/g, ' ').toUpperCase()} | {agent.email}</p>
                         </div>
                     </div>
                     {canManageAgent && (
                         <div className="flex items-center gap-4 flex-wrap">
-                            <div className="flex items-center gap-2"><label htmlFor="new-agent-toggle" className="text-sm font-medium text-text-secondary">New Agent Status</label><button role="switch" aria-checked={!!agent.isNewAgent} onClick={handleToggleNewAgentStatus} className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${agent.isNewAgent ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}><span aria-hidden="true" className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${agent.isNewAgent ? 'translate-x-5' : 'translate-x-0'}`}/></button></div>
-                            <button onClick={handleOpenGoalModalForAdd} className="flex items-center gap-2 bg-primary/10 text-primary font-semibold py-2 px-3 rounded-lg text-sm"><Plus size={16}/> Assign Goal</button>
-                            <button onClick={() => setIsHomeworkModalOpen(true)} className="flex items-center gap-2 bg-primary/10 text-primary font-semibold py-2 px-3 rounded-lg text-sm"><GraduationCap size={16}/> Assign Homework</button>
+                            <button 
+                                onClick={() => navigate(`/performance-logs?agentId=${agent.id}`)}
+                                className="flex items-center gap-2 bg-primary text-on-accent font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+                            >
+                                <PlusCircle size={18}/> Log Session
+                            </button>
+                            <div className="flex items-center gap-2 bg-surface border border-border p-2 rounded-xl"><label htmlFor="new-agent-toggle" className="text-xs font-bold text-text-secondary uppercase">New Status</label><button role="switch" aria-checked={!!agent.isNewAgent} onClick={handleToggleNewAgentStatus} className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${agent.isNewAgent ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}><span aria-hidden="true" className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${agent.isNewAgent ? 'translate-x-5' : 'translate-x-0'}`}/></button></div>
                         </div>
                     )}
                 </div>
             </header>
 
-            <div className="px-4 sm:px-6 lg:px-8"><div className="flex items-center border-b border-border -mx-4 px-4 overflow-x-auto"><TabButton tabId="overview" label="Overview" icon={LayoutDashboard} /><TabButton tabId="goals" label="Goals" icon={Target} /><TabButton tabId="gps" label="GPS" icon={Compass} /><TabButton tabId="architect" label="Architect" icon={Network} /><TabButton tabId="learning" label="Learning" icon={BookOpen} /><TabButton tabId="activity" label="Activity Logs" icon={ClipboardList} /><TabButton tabId="performance" label="Performance" icon={UserCheck} /></div></div>
+            <div className="px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center border-b border-border -mx-4 px-4 overflow-x-auto custom-scrollbar">
+                    <TabButton active={activeTab === 'overview'} label="Overview" icon={LayoutDashboard} onClick={() => setActiveTab('overview')} />
+                    <TabButton active={activeTab === 'performance'} label="Performance History" icon={UserCheck} onClick={() => setActiveTab('performance')} />
+                    <TabButton active={activeTab === 'goals'} label="Production Goals" icon={Target} onClick={() => setActiveTab('goals')} />
+                    <TabButton active={activeTab === 'gps'} label="Business Plan" icon={Compass} onClick={() => setActiveTab('gps')} />
+                    <TabButton active={activeTab === 'architect'} label="Growth Architect" icon={Network} onClick={() => setActiveTab('architect')} />
+                    <TabButton active={activeTab === 'learning'} label="Training" icon={BookOpen} onClick={() => setActiveTab('learning')} />
+                    <TabButton active={activeTab === 'activity'} label="Habit Logs" icon={ClipboardList} onClick={() => setActiveTab('activity')} />
+                </div>
+            </div>
 
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-                {activeTab === 'overview' && <Card><h2 className="text-2xl font-bold mb-4">Agent Overview</h2><div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><KpiDisplay label="GCI" value={`$${(agent.gci || 0).toLocaleString()}`} /><KpiDisplay label="Listings" value={agent.listings || 0} /><KpiDisplay label="Calls" value={agent.calls || 0} /><KpiDisplay label="Appointments" value={agent.appointments || 0} /></div><div><h3 className="font-bold text-lg mb-2">Recent Performance Logs</h3>{performanceLogs.length > 0 ? <div className="space-y-3">{performanceLogs.slice(0, 3).map(log => <PerformanceLogSummaryCard key={log.id} log={log} />)}</div> : <p className="text-sm text-text-secondary">No performance logs found.</p>}</div></Card>}
-                {activeTab === 'goals' && <Card><h2 className="text-2xl font-bold mb-4">Goals</h2>{goals.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{goals.map(goal => <GoalProgressCard key={goal.id} goal={goal} onEdit={() => handleOpenGoalModalForEdit(goal)} onDelete={() => handleDeleteGoal(goal.id)} onArchive={() => handleToggleArchiveGoal(goal.id, !!goal.isArchived)}/>)}</div> : <p className="text-sm text-text-secondary">No goals set for this agent.</p>}</Card>}
-                {activeTab === 'gps' && <Card><h2 className="text-2xl font-bold mb-4">Strategic GPS</h2>{gpsData ? <GpsDisplay data={gpsData} /> : <p className="text-text-secondary text-center py-8">This agent has not completed their Strategic GPS yet.</p>}{economicModelData && economicCalculations ? <><h2 className="text-2xl font-bold my-4 pt-4 border-t">Economic Model</h2><ReadOnlyEconomicModel data={economicModelData} calculations={economicCalculations} /></> : <p className="text-text-secondary text-center py-8 mt-4 border-t">Economic Model data not available.</p>}</Card>}
-                {activeTab === 'architect' && <Card><h2 className="text-2xl font-bold mb-4">Growth Architect</h2><ArchitectDisplay blueprint={blueprint} agent={agent} kpis={{ gci: agent.gci || 0, transactions: agentTransactions.length }} /></Card>}
-                {activeTab === 'learning' && <Card><h2 className="text-2xl font-bold mb-4">Learning & Development</h2><PlaybookProgressSummary agent={agent} playbooks={playbooks} homework={homework} onDeleteHomework={handleDeleteHomework} /></Card>}
-                {activeTab === 'activity' && <Card><h2 className="text-2xl font-bold mb-4">Habit Logs</h2>{habitLogs.length > 0 && habitSettings ? <div className="space-y-2">{habitLogs.map(log => { const isExpanded = expandedLogId === log.id; const date = new Date(log.date); date.setUTCHours(12); const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' }); return (<Card key={log.id} className="p-0 overflow-hidden"><button onClick={() => setExpandedLogId(isExpanded ? null : log.id)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5"><p className="font-bold">{formattedDate}</p><ChevronDown className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></button>{isExpanded && <LogDetailView log={log} settings={habitSettings} />}</Card>); })}</div> : <p className="text-sm text-text-secondary text-center py-8">No habit logs found for this agent.</p>}</Card>}
-                {activeTab === 'performance' && <Card><h2 className="text-2xl font-bold mb-4">All Performance Logs</h2>{performanceLogs.length > 0 ? <div className="space-y-3">{performanceLogs.map(log => <PerformanceLogSummaryCard key={log.id} log={log} />)}</div> : <p className="text-sm text-text-secondary">No performance logs found.</p>}</Card>}
+                {activeTab === 'overview' && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <KpiDisplay label="Total GCI" value={`$${(agent.gci || 0).toLocaleString()}`} />
+                            <KpiDisplay label="Units Taken" value={agent.listings || 0} />
+                            <KpiDisplay label="Calls Made" value={agent.calls || 0} />
+                            <KpiDisplay label="Appts Met" value={agent.appointments || 0} />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <Card>
+                                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><UserCheck className="text-primary"/> Recent Performance Review</h3>
+                                {performanceLogs.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {performanceLogs.slice(0, 3).map(log => <PerformanceLogSummaryCard key={log.id} log={log} />)}
+                                        <button onClick={() => setActiveTab('performance')} className="w-full text-center text-sm font-bold text-primary py-2 hover:underline">View All Records &rarr;</button>
+                                    </div>
+                                ) : <p className="text-sm text-text-secondary py-8 text-center bg-background/30 rounded-xl border border-dashed">No performance history found.</p>}
+                            </Card>
+                            <Card>
+                                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Target className="text-primary"/> Active Top Goals</h3>
+                                {goals.filter(g => !g.isArchived).length > 0 ? (
+                                    <div className="space-y-4">
+                                        {goals.filter(g => !g.isArchived).slice(0, 2).map(goal => <GoalProgressCard key={goal.id} goal={goal} />)}
+                                        <button onClick={() => setActiveTab('goals')} className="w-full text-center text-sm font-bold text-primary py-2 hover:underline">Manage All Goals &rarr;</button>
+                                    </div>
+                                ) : <p className="text-sm text-text-secondary py-8 text-center bg-background/30 rounded-xl border border-dashed">No active goals currently.</p>}
+                            </Card>
+                        </div>
+                    </div>
+                )}
+                
+                {activeTab === 'performance' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold">Review History</h2>
+                            <button 
+                                onClick={() => navigate(`/performance-logs?agentId=${agent.id}`)}
+                                className="flex items-center gap-2 px-4 py-2 bg-primary text-on-accent font-bold rounded-xl shadow-lg shadow-primary/20"
+                            >
+                                <Plus size={18}/> Log New Review
+                            </button>
+                        </div>
+                        {performanceLogs.length > 0 ? (
+                            <div className="space-y-3">
+                                {performanceLogs.map(log => <PerformanceLogSummaryCard key={log.id} log={log} />)}
+                            </div>
+                        ) : <Card className="text-center py-16 opacity-50"><MessageSquare size={48} className="mx-auto mb-2"/><p>No historical performance records.</p></Card>}
+                    </div>
+                )}
+
+                {activeTab === 'goals' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-text-primary">Agent Goals</h2>
+                            <button onClick={handleOpenGoalModalForAdd} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-accent font-bold rounded-xl"><Plus size={18}/> Create Custom Goal</button>
+                        </div>
+                        {goals.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {goals.map(goal => <GoalProgressCard key={goal.id} goal={goal} onEdit={() => handleOpenGoalModalForEdit(goal)} onDelete={() => handleDeleteGoal(goal.id)} onArchive={() => handleToggleArchiveGoal(goal.id, !!goal.isArchived)}/>)}
+                            </div>
+                        ) : <Card className="text-center py-16 opacity-50"><Target size={48} className="mx-auto mb-2"/><p>This agent hasn't set any production goals yet.</p></Card>}
+                    </div>
+                )}
+
+                {activeTab === 'gps' && <Card><h2 className="text-2xl font-bold mb-6">Strategic Business Plan</h2>{gpsData ? <GpsDisplay data={gpsData} /> : <div className="text-center py-12 bg-background/30 rounded-2xl border border-dashed"><Compass size={48} className="mx-auto mb-2 opacity-20"/><p className="text-text-secondary">Strategic GPS not yet completed by agent.</p></div>}{economicModelData && economicCalculations && <><h2 className="text-2xl font-bold my-8 pt-8 border-t">Economic Projections</h2><ReadOnlyEconomicModel data={economicModelData} calculations={economicCalculations} /></>}</Card>}
+                {activeTab === 'architect' && <Card><h2 className="text-2xl font-bold mb-6">Team Growth Architect</h2><ArchitectDisplay blueprint={blueprint} agent={agent} kpis={{ gci: agent.gci || 0, transactions: agentTransactions.length }} /></Card>}
+                {activeTab === 'learning' && <div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Training & Assignments</h2><button onClick={() => setIsHomeworkModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary font-bold rounded-xl"><GraduationCap size={18}/> Assign New Homework</button></div><Card><PlaybookProgressSummary agent={agent} playbooks={playbooks} homework={homework} onDeleteHomework={handleDeleteHomework} /></Card></div>}
+                
+                {activeTab === 'activity' && (
+                    <Card>
+                        <h2 className="text-2xl font-bold mb-6">Execution Log</h2>
+                        {habitLogs.length > 0 && habitSettings ? (
+                            <div className="space-y-2">
+                                {habitLogs.slice(0, 15).map(log => { 
+                                    const isExpanded = expandedLogId === log.id; 
+                                    const date = new Date(log.date); 
+                                    date.setUTCHours(12); 
+                                    const formattedDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }); 
+                                    return (
+                                        <div key={log.id} className="border border-border rounded-xl overflow-hidden mb-2">
+                                            <button onClick={() => setExpandedLogId(isExpanded ? null : log.id)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5 transition-colors font-bold">
+                                                <span>{formattedDate}</span>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-xs font-bold text-primary uppercase">Total Points: {calculateTotalPointsForDetail(log, habitSettings)}</span>
+                                                    <ChevronDown className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                                </div>
+                                            </button>
+                                            {isExpanded && <LogDetailView log={log} settings={habitSettings} />}
+                                        </div>
+                                    ); 
+                                })}
+                            </div>
+                        ) : <div className="text-center py-12 opacity-50"><ClipboardList size={48} className="mx-auto mb-2"/><p>No daily habit logs found for this period.</p></div>}
+                    </Card>
+                )}
             </div>
 
             <GoalModal isOpen={isGoalModalOpen} onClose={handleCloseGoalModal} onSubmit={handleSubmitGoal} title={goalToEdit ? `Edit Goal for ${agent.name}` : `Assign Goal to ${agent.name}`} submitButtonText={goalToEdit ? "Save Changes" : "Assign Goal"} goalToEdit={goalToEdit} />
@@ -485,9 +581,5 @@ const AgentDetailPage: React.FC = () => {
         </div>
     );
 };
-
-const KpiDisplay: React.FC<{ label: string; value: string | number; }> = ({ label, value }) => (
-    <div className="bg-surface p-3 rounded-lg text-center"><p className="text-xs text-text-secondary uppercase tracking-wider">{label}</p><p className="text-2xl font-bold text-text-primary">{typeof value === 'number' ? value.toLocaleString() : value}</p></div>
-);
 
 export default AgentDetailPage;

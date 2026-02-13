@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useGoals } from '../contexts/GoalContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { StarRating } from '../components/ui/StarRating';
 import type { PerformanceLog, Goal, TeamMember } from '../types';
-import { Settings, PlusCircle, MessageSquare, CheckSquare, Star, Send, MoreVertical, Archive, ArchiveRestore, ChevronDown, Edit, Save, Target, AlertTriangle } from 'lucide-react';
+import { Settings, PlusCircle, MessageSquare, CheckSquare, Star, Send, MoreVertical, Archive, ArchiveRestore, ChevronDown, Edit, Save, Target, AlertTriangle, X, UserCheck } from 'lucide-react';
 
 const LogForm: React.FC<{ 
     agentId: string;
@@ -106,9 +108,12 @@ const LogForm: React.FC<{
     };
     
     return (
-        <Card>
+        <Card className="border-2 border-primary/20 shadow-xl animate-in slide-in-from-top-4 duration-300">
             <form onSubmit={handleSubmit} className="space-y-4">
-                <h2 className="text-2xl font-bold">{logToEdit ? 'Edit Log' : 'Create New Performance Log'}</h2>
+                <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-2xl font-bold">{logToEdit ? 'Edit Performance Log' : 'New Performance Log'}</h2>
+                    <button type="button" onClick={onCancel} className="p-2 hover:bg-destructive/10 text-destructive rounded-full"><X size={20}/></button>
+                </div>
                 <div>
                     <label className="block text-sm font-medium text-text-secondary mb-1">Log Type</label>
                     <select value={logType} onChange={e => setLogType(e.target.value as PerformanceLog['type'])} className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary">
@@ -133,18 +138,18 @@ const LogForm: React.FC<{
                 )}
                 
                 {(['coaching_session', 'performance_review', 'goal_review'].includes(logType)) && (
-                    <div className="space-y-2">
-                         <label className="block text-sm font-medium text-text-secondary">Ratings</label>
-                         <div className="flex justify-between items-center"><span className="text-sm">Prospecting:</span> <StarRating rating={ratings.prospecting} onRatingChange={r => setRatings(p => ({...p, prospecting: r}))} /></div>
-                         <div className="flex justify-between items-center"><span className="text-sm">Skill Development:</span> <StarRating rating={ratings.skillDevelopment} onRatingChange={r => setRatings(p => ({...p, skillDevelopment: r}))} /></div>
-                         <div className="flex justify-between items-center"><span className="text-sm">Mindset:</span> <StarRating rating={ratings.mindset} onRatingChange={r => setRatings(p => ({...p, mindset: r}))} /></div>
+                    <div className="space-y-2 bg-background/50 p-4 rounded-xl">
+                         <label className="block text-sm font-bold text-text-secondary uppercase tracking-wider mb-2">Session Ratings</label>
+                         <div className="flex justify-between items-center"><span className="text-sm font-medium">Prospecting Efforts:</span> <StarRating rating={ratings.prospecting} onRatingChange={r => setRatings(p => ({...p, prospecting: r}))} /></div>
+                         <div className="flex justify-between items-center"><span className="text-sm font-medium">Skill Development:</span> <StarRating rating={ratings.skillDevelopment} onRatingChange={r => setRatings(p => ({...p, skillDevelopment: r}))} /></div>
+                         <div className="flex justify-between items-center"><span className="text-sm font-medium">Mindset / Motivation:</span> <StarRating rating={ratings.mindset} onRatingChange={r => setRatings(p => ({...p, mindset: r}))} /></div>
                     </div>
                 )}
                  
                 {(['performance_review', 'goal_review'].includes(logType)) && (
                     <div>
-                        <label className="block text-sm font-medium text-text-secondary mb-2">Goals Reviewed</label>
-                        <div className="space-y-2 max-h-40 overflow-y-auto bg-input p-2 rounded-md">
+                        <label className="block text-sm font-medium text-text-secondary mb-2">Goals Reviewed During Session</label>
+                        <div className="space-y-2 max-h-40 overflow-y-auto bg-input p-2 rounded-md border border-border">
                             {agentGoals.length > 0 ? agentGoals.map(goal => (
                                 <div key={goal.id} className="flex items-center gap-2">
                                     <input 
@@ -156,20 +161,20 @@ const LogForm: React.FC<{
                                     />
                                     <label htmlFor={`goal-check-${goal.id}`} className="text-sm font-medium text-text-primary">{goal.title}</label>
                                 </div>
-                            )) : <p className="text-xs text-text-secondary text-center">No active goals found for this agent.</p>}
+                            )) : <p className="text-xs text-text-secondary text-center py-4">No active goals found for this agent.</p>}
                         </div>
                     </div>
                 )}
                 
                 <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Notes</label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full min-h-[120px] bg-input border border-border rounded-md p-3 text-sm" placeholder="Add detailed notes here..."/>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Coach Notes & Takeaways</label>
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full min-h-[120px] bg-input border border-border rounded-md p-3 text-sm" placeholder="Summarize the breakthroughs, challenges, or next steps agreed upon..."/>
                 </div>
 
                 <div className="flex justify-end gap-4 pt-4">
-                    <button type="button" onClick={onCancel} className="py-2 px-4 rounded-lg text-text-secondary hover:bg-text-primary/5">Cancel</button>
-                    <button type="submit" disabled={saving} className="min-w-[120px] flex justify-center items-center py-2 px-4 rounded-lg bg-primary text-on-accent font-semibold hover:bg-opacity-90 disabled:bg-opacity-50">
-                        {saving ? <Spinner /> : <Save className="mr-2" size={16}/>} {logToEdit ? 'Save Changes' : 'Save Log'}
+                    <button type="button" onClick={onCancel} className="py-2 px-6 rounded-xl text-text-secondary hover:bg-text-primary/5 font-semibold">Cancel</button>
+                    <button type="submit" disabled={saving} className="min-w-[160px] flex justify-center items-center py-2.5 px-6 rounded-xl bg-primary text-on-accent font-bold hover:bg-opacity-90 shadow-lg shadow-primary/20 transition-all active:scale-95 disabled:opacity-50">
+                        {saving ? <Spinner /> : <><Save className="mr-2" size={18}/> {logToEdit ? 'Update Log' : 'Save Log'}</>}
                     </button>
                 </div>
             </form>
@@ -191,12 +196,10 @@ const LogItem: React.FC<{
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                onToggleMenu(); // This assumes toggle will close it
+                if (isMenuOpen) onToggleMenu();
             }
         };
-        if (isMenuOpen) {
-            document.addEventListener("mousedown", handleClickOutside);
-        }
+        document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [isMenuOpen, onToggleMenu]);
 
@@ -208,30 +211,32 @@ const LogItem: React.FC<{
     }[log.type];
     
     return (
-        <Card className="p-0 overflow-hidden">
+        <Card className={`p-0 overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-primary/20' : 'hover:border-primary/30'}`}>
             <div className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                    <typeInfo.icon size={20} className={typeInfo.color}/>
+                    <div className={`p-2 rounded-lg bg-opacity-10 ${typeInfo.color.replace('text', 'bg')}`}>
+                        <typeInfo.icon size={20} className={typeInfo.color}/>
+                    </div>
                     <div>
                         <p className="font-bold text-text-primary">{typeInfo.label}</p>
-                        <p className="text-sm text-text-secondary">{new Date(log.date).toLocaleDateString()}</p>
+                        <p className="text-xs text-text-secondary">{new Date(log.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={onToggleExpand} className="flex items-center gap-1 text-sm text-primary font-semibold">
-                        {isExpanded ? 'Collapse' : 'Details'}
-                        <ChevronDown className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    <button onClick={onToggleExpand} className="flex items-center gap-1 text-sm text-primary font-bold hover:underline px-2 py-1 rounded-lg transition-colors">
+                        {isExpanded ? 'Hide Details' : 'View Details'}
+                        <ChevronDown className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} size={16} />
                     </button>
-                    <div className="relative">
-                        <button onClick={onToggleMenu} className="p-2 rounded-full hover:bg-primary/20">
+                    <div className="relative" ref={menuRef}>
+                        <button onClick={onToggleMenu} className="p-2 rounded-full hover:bg-primary/20 transition-colors">
                             <MoreVertical size={16}/>
                         </button>
                         {isMenuOpen && (
-                            <div ref={menuRef} className="absolute right-0 mt-2 w-36 bg-surface border border-border rounded-lg shadow-xl z-10">
-                                <button onClick={onEdit} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm hover:bg-primary/10 rounded-t-lg"><Edit size={14} /> Edit</button>
-                                <button onClick={onArchive} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm hover:bg-primary/10 rounded-b-lg">
-                                    {log.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                                    {log.isArchived ? 'Unarchive' : 'Archive'}
+                            <div className="absolute right-0 mt-2 w-40 bg-surface border border-border rounded-xl shadow-2xl z-10 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                                <button onClick={onEdit} className="w-full text-left flex items-center gap-2 px-4 py-3 text-sm font-semibold hover:bg-primary/10 transition-colors border-b border-border"><Edit size={14} /> Edit Log</button>
+                                <button onClick={onArchive} className="w-full text-left flex items-center gap-2 px-4 py-3 text-sm font-semibold hover:bg-primary/10 transition-colors">
+                                    {log.isArchived ? <ArchiveRestore size={14} className="text-success" /> : <Archive size={14} className="text-warning" />}
+                                    {log.isArchived ? 'Unarchive' : 'Archive Log'}
                                 </button>
                             </div>
                         )}
@@ -239,31 +244,48 @@ const LogItem: React.FC<{
                 </div>
             </div>
             {isExpanded && (
-                 <div className="p-4 border-t border-border bg-background/50 text-sm space-y-3">
-                    {log.type === 'attendance' && <p><strong>Event:</strong> {log.eventName} - <strong>{log.attended ? 'Attended' : 'Absent'}</strong></p>}
+                 <div className="p-5 border-t border-border bg-background/30 text-sm space-y-4 animate-in slide-in-from-top-2 duration-200">
+                    {log.type === 'attendance' && <p className="p-3 bg-surface rounded-lg border border-border"><strong>Event:</strong> {log.eventName} — <span className={log.attended ? 'text-success font-bold' : 'text-destructive font-bold'}>{log.attended ? 'Attended' : 'Absent'}</span></p>}
                     {log.ratings && (
-                        <div>
-                            <p><strong>Ratings:</strong></p>
-                            <ul className="list-disc list-inside ml-4">
-                                <li>Prospecting: {log.ratings.prospecting}/5</li>
-                                <li>Skill Development: {log.ratings.skillDevelopment}/5</li>
-                                <li>Mindset: {log.ratings.mindset}/5</li>
-                            </ul>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="bg-surface p-3 rounded-xl border border-border text-center">
+                                <p className="text-[10px] uppercase font-bold text-text-secondary mb-1">Prospecting</p>
+                                <div className="flex justify-center"><StarRating rating={log.ratings.prospecting} size={14} /></div>
+                            </div>
+                            <div className="bg-surface p-3 rounded-xl border border-border text-center">
+                                <p className="text-[10px] uppercase font-bold text-text-secondary mb-1">Skill Dev</p>
+                                <div className="flex justify-center"><StarRating rating={log.ratings.skillDevelopment} size={14} /></div>
+                            </div>
+                            <div className="bg-surface p-3 rounded-xl border border-border text-center">
+                                <p className="text-[10px] uppercase font-bold text-text-secondary mb-1">Mindset</p>
+                                <div className="flex justify-center"><StarRating rating={log.ratings.mindset} size={14} /></div>
+                            </div>
                         </div>
                     )}
                     {log.goalProgress && log.goalProgress.length > 0 && (
-                        <div>
-                            <p><strong>Goals Reviewed:</strong></p>
-                            <ul className="list-disc list-inside ml-4">
-                                {log.goalProgress.map(gp => (
-                                    <li key={gp.goalId}>{gp.goalTitle} ({gp.currentValue.toLocaleString()} / {gp.targetValue.toLocaleString()})</li>
-                                ))}
-                            </ul>
+                        <div className="bg-surface p-4 rounded-xl border border-border">
+                            <p className="font-bold text-text-primary mb-3 flex items-center gap-2"><Target size={16} className="text-primary" /> Goals Reviewed</p>
+                            <div className="space-y-3">
+                                {log.goalProgress.map(gp => {
+                                    const progress = gp.targetValue > 0 ? (gp.currentValue / gp.targetValue) * 100 : 0;
+                                    return (
+                                        <div key={gp.goalId}>
+                                            <div className="flex justify-between text-xs font-semibold mb-1">
+                                                <span>{gp.goalTitle}</span>
+                                                <span className="text-primary">{progress.toFixed(0)}%</span>
+                                            </div>
+                                            <div className="w-full bg-background rounded-full h-1.5 overflow-hidden">
+                                                <div className="bg-primary h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                     <div>
-                        <p><strong>Notes:</strong></p>
-                        <p className="whitespace-pre-wrap p-2 bg-surface rounded-md">{log.notes || 'No notes provided.'}</p>
+                        <p className="font-bold text-text-primary mb-2">Coach's Meeting Notes:</p>
+                        <p className="whitespace-pre-wrap p-4 bg-surface rounded-xl border border-border text-text-secondary leading-relaxed">{log.notes || 'No detailed notes provided for this session.'}</p>
                     </div>
                 </div>
             )}
@@ -273,6 +295,9 @@ const LogItem: React.FC<{
 
 const PerformanceLogsPage: React.FC = () => {
     const { managedAgents, loadingAgents, getPerformanceLogsForAgent, updatePerformanceLog } = useAuth();
+    const location = useLocation();
+    // Initialize navigate
+    const navigate = useNavigate();
     const [selectedAgentId, setSelectedAgentId] = useState('');
     const [logs, setLogs] = useState<PerformanceLog[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(false);
@@ -283,6 +308,16 @@ const PerformanceLogsPage: React.FC = () => {
     const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
     const [showArchived, setShowArchived] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+    // Effect to handle deep linking via ?agentId=xxx
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const agentIdParam = params.get('agentId');
+        if (agentIdParam) {
+            setSelectedAgentId(agentIdParam);
+            setShowForm(true); // Default to showing form if deep linking
+        }
+    }, [location.search]);
 
     const fetchLogs = useCallback(async () => {
         if (!selectedAgentId) return;
@@ -318,6 +353,7 @@ const PerformanceLogsPage: React.FC = () => {
         setLogToEdit(log);
         setShowForm(true);
         setOpenMenuId(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleArchiveToggle = async (log: PerformanceLog) => {
@@ -337,35 +373,40 @@ const PerformanceLogsPage: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col">
-            <header className="p-4 sm:p-6 lg:p-8">
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">Performance Logs</h1>
-                <p className="text-lg text-text-secondary mt-1">Track coaching sessions, attendance, and reviews for your team members.</p>
+            <header className="p-4 sm:p-6 lg:p-8 flex justify-between items-start flex-wrap gap-4">
+                <div>
+                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">Performance Center</h1>
+                    <p className="text-lg text-text-secondary mt-1">Directly log and review coaching interactions and agent breakthroughs.</p>
+                </div>
+                {selectedAgentId && (
+                     <button 
+                        onClick={() => { setLogToEdit(null); setShowForm(!showForm); }} 
+                        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-xl active:scale-95 ${showForm ? 'bg-destructive/10 text-destructive' : 'bg-primary text-on-accent shadow-primary/20'}`}
+                    >
+                        {showForm ? <X size={20} /> : <PlusCircle size={20} />}
+                        {showForm && !logToEdit ? 'Discard Draft' : 'Add New Review Log'}
+                    </button>
+                )}
             </header>
 
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:p-8 pb-8 space-y-6">
-                <Card>
+                <Card className="bg-primary/5 border-primary/10">
                     <div className="flex flex-wrap gap-4 justify-between items-end">
-                        <div>
-                            <label htmlFor="agent-select" className="block text-sm font-medium text-text-secondary mb-1">Select a User</label>
+                        <div className="flex-1 min-w-[200px]">
+                            <label htmlFor="agent-select" className="block text-xs font-bold text-text-secondary uppercase tracking-widest mb-1.5 ml-1">Agent / Team Member</label>
                             <select
                                 id="agent-select"
                                 value={selectedAgentId}
                                 onChange={e => setSelectedAgentId(e.target.value)}
-                                className="w-full max-w-sm bg-input border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-primary shadow-sm"
                                 disabled={loadingAgents}
                             >
-                                <option value="">{loadingAgents ? 'Loading users...' : '-- Select User --'}</option>
+                                <option value="">{loadingAgents ? 'Loading database...' : '-- Select Agent for Review --'}</option>
                                 {managedAgents.map(agent => (
                                     <option key={agent.id} value={agent.id}>{agent.name}</option>
                                 ))}
                             </select>
                         </div>
-                        {selectedAgentId && (
-                             <button onClick={() => { setLogToEdit(null); setShowForm(!showForm); }} className="flex items-center justify-center bg-primary text-on-accent font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors">
-                                <PlusCircle className="mr-2" size={16} />
-                                {showForm && !logToEdit ? 'Cancel' : 'Add New Log'}
-                            </button>
-                        )}
                     </div>
                 </Card>
 
@@ -390,15 +431,22 @@ const PerformanceLogsPage: React.FC = () => {
                 )}
                 
                 {selectedAgentId && !error && (
-                    <Card>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold">Log History {selectedAgent && `for ${selectedAgent.name}`}</h2>
-                             <button onClick={() => setShowArchived(!showArchived)} className="flex items-center gap-2 text-sm font-semibold rounded-lg transition-colors px-3 py-1.5 bg-input border border-border text-text-secondary hover:border-primary">
-                                <Archive size={16}/> {showArchived ? 'Hide Archived' : 'Show Archived'}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center px-2">
+                            <h2 className="text-2xl font-bold text-text-primary">Historical Logs for {selectedAgent?.name}</h2>
+                             <button 
+                                onClick={() => setShowArchived(!showArchived)} 
+                                className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all px-3 py-1.5 border border-border ${showArchived ? 'bg-primary text-on-accent border-primary' : 'bg-surface text-text-secondary hover:border-primary/50'}`}
+                            >
+                                <Archive size={14}/> {showArchived ? 'Hide Archived' : 'Show Archived'}
                             </button>
                         </div>
-                        {loadingLogs ? <div className="flex justify-center py-8"><Spinner/></div> :
-                        sortedLogs.length > 0 ? (
+                        
+                        {loadingLogs ? (
+                            <div className="flex justify-center py-20 bg-surface/50 rounded-2xl border border-dashed border-border">
+                                <Spinner className="w-10 h-10"/>
+                            </div>
+                        ) : sortedLogs.length > 0 ? (
                              <div className="space-y-4">
                                 {sortedLogs.map(log => (
                                     <LogItem 
@@ -414,9 +462,29 @@ const PerformanceLogsPage: React.FC = () => {
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-center text-text-secondary py-8">{showArchived && logs.length > 0 ? "No archived logs for this user." : "No logs found for this user."}</p>
+                            <div className="text-center py-20 bg-surface/30 rounded-2xl border border-dashed border-border">
+                                <p className="text-text-secondary font-medium">
+                                   {showArchived && logs.length > 0 ? "You have no archived logs for this user." : "No coaching history found for this agent yet."}
+                                </p>
+                                {!showForm && <button onClick={() => setShowForm(true)} className="mt-4 text-primary font-bold text-sm hover:underline">Start the first review log now &rarr;</button>}
+                            </div>
                         )}
-                    </Card>
+                    </div>
+                )}
+
+                {!selectedAgentId && !loadingAgents && (
+                    <div className="text-center py-32">
+                        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <UserCheck size={40} className="text-primary opacity-40" />
+                        </div>
+                        <h2 className="text-2xl font-black tracking-tight text-text-primary">Agent Select Required</h2>
+                        <p className="text-sm font-semibold text-text-secondary max-w-xs mx-auto mt-2 mb-6">Pick an agent from the dropdown above to manage their performance history or start a new session.</p>
+                        <div className="flex justify-center gap-3">
+                            {/* Corrected usage of navigate */}
+                            <button onClick={() => navigate('/')} className="px-4 py-2 text-sm font-bold text-text-secondary hover:text-primary transition-colors">Go to Dashboard</button>
+                            <button onClick={() => navigate('/team-hub')} className="px-4 py-2 text-sm font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors">Browse Agent Roster</button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

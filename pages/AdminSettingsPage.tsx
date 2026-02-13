@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Link } from 'react-router-dom';
@@ -27,16 +28,165 @@ import {
     MinusCircle,
     Info,
     ExternalLink,
-    HelpCircle
+    HelpCircle,
+    Network,
+    RefreshCw,
+    Save,
+    Zap,
+    // Add missing KeyRound icon
+    KeyRound
 } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { useGoals } from '../contexts/GoalContext';
 import type { MarketCenter, TeamMember, Team, Announcement } from '../types';
 import { Spinner } from '../components/ui/Spinner';
-import { downloadCsv } from '../lib/exportUtils';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, getDocs, addDoc, serverTimestamp, orderBy, query, deleteDoc, doc, where, updateDoc, getDoc } from 'firebase/firestore';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
+
+const ConnectionCenter: React.FC = () => {
+    const { userData, regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook } = useAuth();
+    const [apiKey, setApiKey] = useState(userData?.zapierApiKey || '');
+    const [loadingKey, setLoadingKey] = useState(!userData?.zapierApiKey);
+    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+    const [webhooks, setWebhooks] = useState<Record<string, string>>({});
+    const [webhookInputs, setWebhookInputs] = useState<Record<string, string>>({});
+    const [loadingWebhooks, setLoadingWebhooks] = useState(true);
+    const [savingWebhook, setSavingWebhook] = useState<string | null>(null);
+
+    const AVAILABLE_TRIGGERS = {
+        'new_goal': 'New Goal Created',
+        'new_transaction': 'New Transaction Logged',
+        'new_client_lead': 'New Client Lead Added',
+    };
+
+    useEffect(() => {
+        if (!userData?.zapierApiKey) {
+            setLoadingKey(true);
+            regenerateZapierApiKey().then(newKey => {
+                setApiKey(newKey);
+                setLoadingKey(false);
+            });
+        }
+    }, [userData?.zapierApiKey, regenerateZapierApiKey]);
+
+    useEffect(() => {
+        getWebhooks().then(fetchedWebhooks => {
+            setWebhooks(fetchedWebhooks);
+            setWebhookInputs(fetchedWebhooks);
+            setLoadingWebhooks(false);
+        });
+    }, [getWebhooks]);
+
+    const handleRegenerateKey = async () => {
+        if (window.confirm("Are you sure? Regenerating your API key will break any existing integrations.")) {
+            setLoadingKey(true);
+            const newKey = await regenerateZapierApiKey();
+            setApiKey(newKey);
+            setLoadingKey(false);
+        }
+    };
+
+    const handleCopyKey = () => {
+        navigator.clipboard.writeText(apiKey);
+        setCopyStatus('copied');
+        setTimeout(() => setCopyStatus('idle'), 2000);
+    };
+    
+    const handleWebhookInputChange = (eventKey: string, value: string) => {
+        setWebhookInputs(prev => ({ ...prev, [eventKey]: value }));
+    };
+
+    const handleSaveWebhook = async (eventKey: string) => {
+        const url = webhookInputs[eventKey];
+        if (!url || !url.startsWith('https://hooks.zapier.com/')) {
+            alert('Please enter a valid Zapier webhook URL.');
+            return;
+        }
+        setSavingWebhook(eventKey);
+        await saveWebhook(eventKey, url);
+        setWebhooks(prev => ({ ...prev, [eventKey]: url }));
+        setSavingWebhook(null);
+    };
+
+    const handleDeleteWebhook = async (eventKey: string) => {
+        if (window.confirm("Are you sure you want to remove this webhook?")) {
+            setSavingWebhook(eventKey);
+            await deleteWebhook(eventKey);
+            setWebhooks(prev => {
+                const newWebhooks = { ...prev };
+                delete newWebhooks[eventKey];
+                return newWebhooks;
+            });
+            setWebhookInputs(prev => {
+                const newInputs = { ...prev };
+                delete newInputs[eventKey];
+                return newInputs;
+            });
+            setSavingWebhook(null);
+        }
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <Card className="bg-primary/5 border-primary/20">
+                <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+                        <Zap size={24}/>
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold">Zapier Connection</h2>
+                        <p className="text-sm text-text-secondary">Sync your production and leads with 6,000+ apps.</p>
+                    </div>
+                </div>
+                
+                <div className="p-4 bg-surface rounded-xl border border-border">
+                    <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2 uppercase tracking-widest"><KeyRound size={14}/> Your Private API Key</h3>
+                    <p className="text-xs text-text-secondary mb-3">Keep this key secret. Use it when setting up "AgentGPS" actions in your Zapier account.</p>
+                    <div className="flex items-center gap-2 bg-input p-2 rounded-lg border border-border">
+                        {loadingKey ? <Spinner /> : <input type="text" readOnly value={apiKey} className="flex-1 bg-transparent text-sm font-mono text-text-primary outline-none" />}
+                        <button onClick={handleCopyKey} className="p-2 rounded-md text-text-secondary hover:bg-primary/10 hover:text-primary transition-colors">{copyStatus === 'copied' ? <CheckCircle size={20} className="text-success" /> : <ClipboardCopy size={20} />}</button>
+                    </div>
+                    <button onClick={handleRegenerateKey} disabled={loadingKey} className="mt-2 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-destructive hover:underline"><RefreshCw size={10}/> Regenerate Key</button>
+                </div>
+            </Card>
+
+            <Card>
+                <h3 className="text-xl font-bold mb-4">Automated Triggers</h3>
+                <p className="text-sm text-text-secondary mb-6">Create a "Webhook" trigger in Zapier, then paste the unique URL for each event type below.</p>
+                {loadingWebhooks ? <Spinner/> : (
+                    <div className="space-y-6">
+                        {Object.entries(AVAILABLE_TRIGGERS).map(([eventKey, eventLabel]) => (
+                            <div key={eventKey} className="group">
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-sm font-bold text-text-primary">{eventLabel}</label>
+                                    {webhooks[eventKey] && <span className="text-[10px] font-black text-success uppercase bg-success/10 px-2 py-0.5 rounded-full">Connected</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="relative flex-1">
+                                        <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+                                        <input 
+                                            type="url" 
+                                            value={webhookInputs[eventKey] || ''} 
+                                            onChange={e => handleWebhookInputChange(eventKey, e.target.value)} 
+                                            placeholder="https://hooks.zapier.com/..." 
+                                            className="w-full bg-input border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all" 
+                                        />
+                                    </div>
+                                    {webhooks[eventKey] ? (
+                                        <button onClick={() => handleDeleteWebhook(eventKey)} disabled={savingWebhook === eventKey} className="p-3 bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-colors">{savingWebhook === eventKey ? <Spinner className="w-5 h-5"/> : <Trash2 size={20}/>}</button>
+                                    ) : (
+                                        <button onClick={() => handleSaveWebhook(eventKey)} disabled={savingWebhook === eventKey} className="p-3 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors">{savingWebhook === eventKey ? <Spinner className="w-5 h-5"/> : <Save size={20}/>}</button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+};
 
 const CommunicationCenter: React.FC = () => {
     const { userData, user } = useAuth();
@@ -116,7 +266,7 @@ const CommunicationCenter: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm("Delete this announcement?")) return;
+        if (window.confirm("Delete this announcement?")) return;
         const db = getFirestoreInstance();
         if (!db) return;
         await deleteDoc(doc(db, 'announcements', id));
@@ -436,8 +586,18 @@ const MarketCenterManagement: React.FC = () => {
 
 const AdminSettingsPage: React.FC = () => {
     const { userData } = useAuth();
+    const [activeTab, setActiveTab] = useState<'general' | 'integrations'>('general');
     const isSuperAdmin = P.isSuperAdmin(userData);
     const isLeadership = P.isMcAdmin(userData) || P.isCoach(userData);
+
+    const TabButton: React.FC<{ tabId: 'general' | 'integrations'; label: string; icon: React.ElementType }> = ({ tabId, label, icon: Icon }) => (
+        <button
+            onClick={() => setActiveTab(tabId)}
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === tabId ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-secondary hover:border-border'}`}
+        >
+            <Icon size={16} /> {label}
+        </button>
+    );
 
     return (
         <div className="h-full flex flex-col">
@@ -449,10 +609,14 @@ const AdminSettingsPage: React.FC = () => {
                 <p className="text-lg text-text-secondary mt-1">
                     {isSuperAdmin ? 'Platform-wide configuration and administration.' : 'Market Center management and communication center.'}
                 </p>
+                <div className="mt-8 flex border-b border-border">
+                    <TabButton tabId="general" label="General Admin" icon={Settings} />
+                    <TabButton tabId="integrations" label="Connection Center" icon={Zap} />
+                </div>
             </header>
 
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
-                <Card>
+                {activeTab === 'general' ? (
                     <div className="space-y-6">
                         {isLeadership && (
                             <>
@@ -474,7 +638,9 @@ const AdminSettingsPage: React.FC = () => {
                             </>
                         )}
                     </div>
-                </Card>
+                ) : (
+                    <ConnectionCenter />
+                )}
             </div>
         </div>
     );

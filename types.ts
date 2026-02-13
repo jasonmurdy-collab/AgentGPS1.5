@@ -1,5 +1,4 @@
 
-
 export enum GoalType {
   Annual = 'Annual',
   Quarterly = 'Quarterly',
@@ -67,6 +66,9 @@ export interface TeamMember {
   newAgentResources?: NewAgentResources;
   onboardingChecklistProgress?: string[];
   zapierApiKey?: string;
+  twilioSid?: string;
+  twilioToken?: string;
+  twilioNumber?: string;
 }
 
 // Add missing types that are used in the app

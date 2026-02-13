@@ -2,13 +2,14 @@
 import React, { useState, useMemo, useCallback, DragEvent, FC, useEffect, lazy, Suspense } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
-import { UserSearch, PlusCircle, Mail, Phone, X, Trash2, Edit, Send, Briefcase, User, PhoneCall, Mail as MailIcon, DollarSign, ClipboardList } from 'lucide-react';
+import { UserSearch, PlusCircle, Mail, Phone, X, Trash2, Edit, Send, Briefcase, User, PhoneCall, Mail as MailIcon, DollarSign, ClipboardList, MessageSquare } from 'lucide-react';
 import type { Candidate, PipelineStage, CandidateActivity, TeamMember } from '../types';
 import { PIPELINE_STAGES } from '../types';
 import { createPortal } from 'react-dom';
 import { Spinner } from '../components/ui/Spinner';
 import { CandidateCard } from '../components/dashboard/recruitment/CandidateCard';
 import { RecruitmentStats } from '../components/dashboard/recruitment/RecruitmentStats';
+import { Link } from 'react-router-dom';
 
 // --- UTILITY FUNCTIONS ---
 function timeAgo(dateString: string) {
@@ -27,6 +28,73 @@ function timeAgo(dateString: string) {
 }
 
 // --- SUB-COMPONENTS ---
+
+const SMSModal: FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    recipientName: string;
+    recipientPhone: string;
+    onSend: (message: string) => Promise<void>;
+    isConfigured: boolean;
+}> = ({ isOpen, onClose, recipientName, recipientPhone, onSend, isConfigured }) => {
+    const [message, setMessage] = useState('');
+    const [sending, setSending] = useState(false);
+
+    if (!isOpen) return null;
+
+    const handleSend = async () => {
+        if (!message.trim() || !isConfigured) return;
+        setSending(true);
+        try {
+            await onSend(message.trim());
+            onClose();
+            setMessage('');
+        } catch (e) {
+            alert('Failed to send message. Please check your Twilio settings.');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold flex items-center gap-2"><MessageSquare className="text-primary"/> Text Recruit</h3>
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-primary/10"><X/></button>
+                </div>
+                {!isConfigured ? (
+                    <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl text-center">
+                        <p className="text-sm font-semibold text-warning">Twilio Not Configured</p>
+                        <p className="text-xs text-text-secondary mt-1 mb-3">Please add your Twilio credentials in your Profile settings to send texts.</p>
+                        <Link to="/profile" className="text-xs font-bold text-primary hover:underline">Go to Profile &rarr;</Link>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <p className="text-xs text-text-secondary">To: <strong>{recipientPhone}</strong></p>
+                        <textarea 
+                            value={message}
+                            onChange={e => setMessage(e.target.value)}
+                            className="w-full min-h-[120px] bg-input border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary"
+                            placeholder="Type your message..."
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-text-secondary">Cancel</button>
+                            <button 
+                                onClick={handleSend}
+                                disabled={sending || !message.trim()}
+                                className="flex items-center gap-2 bg-primary text-on-accent px-6 py-2 rounded-xl font-bold shadow-lg shadow-primary/20 disabled:opacity-50"
+                            >
+                                {sending ? <Spinner className="w-4 h-4"/> : <><Send size={16}/> Send SMS</>}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Card>
+        </div>,
+        document.body
+    );
+};
 
 const AddCandidateModal: FC<{
     isOpen: boolean;
@@ -138,6 +206,7 @@ const CandidateDetailModal: FC<{
     const [loadingActivities, setLoadingActivities] = useState(true);
     const [newNote, setNewNote] = useState('');
     const [isLoggingNote, setIsLoggingNote] = useState(false);
+    const [isSMSModalOpen, setIsSMSModalOpen] = useState(false);
 
     const fetchActivities = useCallback(async () => {
         setLoadingActivities(true);
@@ -189,9 +258,15 @@ const CandidateDetailModal: FC<{
         await fetchActivities();
         setIsLoggingNote(false);
     };
+
+    const handleSendSMS = async (message: string) => {
+        await addCandidateActivity(candidate.id, `[SMS Sent]: ${message}`);
+        await fetchActivities();
+    };
     
     const canManageRecruits = userData?.isSuperAdmin || userData?.role === 'market_center_admin' || userData?.role === 'productivity_coach';
     const canEdit = canManageRecruits || user?.uid === candidate.recruiterId;
+    const isTwilioReady = !!(userData?.twilioSid && userData?.twilioToken && userData?.twilioNumber);
     const inputClasses = "w-full bg-input border border-border rounded-md p-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
     const labelClasses = "block text-xs font-semibold text-text-secondary mb-0.5";
 
@@ -208,10 +283,20 @@ const CandidateDetailModal: FC<{
                         <p className="text-sm text-text-secondary">In <span className="font-semibold text-primary">{candidate.stage}</span> stage</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                         {!isEditing && canEdit && (
-                            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-primary/10 text-primary font-semibold py-2 px-3 rounded-lg text-sm">
-                                <Edit size={14}/> Edit Details
-                            </button>
+                         {!isEditing && (
+                            <>
+                                <button 
+                                    onClick={() => setIsSMSModalOpen(true)}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${isTwilioReady ? 'bg-primary text-on-accent shadow-lg shadow-primary/20' : 'bg-surface border border-border text-text-secondary opacity-50'}`}
+                                >
+                                    <MessageSquare size={16}/> Text Recruit
+                                </button>
+                                {canEdit && (
+                                    <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-primary/10 text-primary font-semibold py-2 px-3 rounded-lg text-sm">
+                                        <Edit size={14} /> Edit Details
+                                    </button>
+                                )}
+                            </>
                         )}
                         <button onClick={onClose} className="p-2 rounded-full hover:bg-primary/10 self-start"><X /></button>
                     </div>
@@ -289,6 +374,14 @@ const CandidateDetailModal: FC<{
                     </div>
                 </div>
             </Card>
+            <SMSModal 
+                isOpen={isSMSModalOpen}
+                onClose={() => setIsSMSModalOpen(false)}
+                recipientName={candidate.name}
+                recipientPhone={candidate.phone}
+                isConfigured={isTwilioReady}
+                onSend={handleSendSMS}
+            />
         </div>,
         document.body
     );

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, UserCircle, LogOut, ChevronDown, Home, ClipboardList, Users, ListTodo, MoreHorizontal, X, Plus, Target, UserPlus } from 'lucide-react';
+import { Menu, UserCircle, LogOut, ChevronDown, Home, ClipboardList, Users, ListTodo, MoreHorizontal, X, Plus, Target, UserPlus, UserCheck } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
 import { logoUrl } from '../assets';
@@ -63,6 +63,8 @@ export const MainLayout: React.FC = () => {
     const handleToggleSection = useCallback((title: string) => {
         setExpandedSections(prev => ({ ...prev, [title]: !prev[title] }));
     }, []);
+
+    const isLeadership = P.isTeamLeader(userData) || P.isCoach(userData);
 
     return (
         <div className="flex h-screen bg-background text-text-primary overflow-hidden">
@@ -160,29 +162,36 @@ export const MainLayout: React.FC = () => {
 
                 {/* Quick Action Overlay (FAB Menu) */}
                 {isQuickActionOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
                         <div className="w-full max-w-sm bg-surface rounded-3xl p-6 shadow-2xl animate-in zoom-in-95">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold">Quick Action</h3>
+                                <h3 className="text-xl font-bold">Log New Action</h3>
                                 <button onClick={() => setIsQuickActionOpen(false)} className="p-2 hover:bg-primary/5 rounded-full"><X size={24}/></button>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <button onClick={() => { navigate('/client-pipeline'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-colors">
-                                    <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center"><UserPlus size={24}/></div>
+                                <button onClick={() => { navigate('/client-pipeline'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-all active:scale-95">
+                                    <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20"><UserPlus size={24}/></div>
                                     <span className="font-bold text-sm">New Lead</span>
                                 </button>
-                                <button onClick={() => { navigate('/goals'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-success/5 hover:bg-success/10 transition-colors">
-                                    <div className="w-12 h-12 rounded-full bg-success text-white flex items-center justify-center"><Target size={24}/></div>
-                                    <span className="font-bold text-sm">Add Goal</span>
+                                <button onClick={() => { navigate('/goals'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-success/5 hover:bg-success/10 transition-all active:scale-95">
+                                    <div className="w-12 h-12 rounded-full bg-success text-white flex items-center justify-center shadow-lg shadow-success/20"><Target size={24}/></div>
+                                    <span className="font-bold text-sm">Set Goal</span>
                                 </button>
-                                <button onClick={() => { navigate('/todos'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-accent-secondary/5 hover:bg-accent-secondary/10 transition-colors">
-                                    <div className="w-12 h-12 rounded-full bg-accent-secondary text-white flex items-center justify-center"><ListTodo size={24}/></div>
-                                    <span className="font-bold text-sm">New Task</span>
+                                <button onClick={() => { navigate('/todos'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-accent-secondary/5 hover:bg-accent-secondary/10 transition-all active:scale-95">
+                                    <div className="w-12 h-12 rounded-full bg-accent-secondary text-white flex items-center justify-center shadow-lg shadow-accent-secondary/20"><ListTodo size={24}/></div>
+                                    <span className="font-bold text-sm">Add Task</span>
                                 </button>
-                                <button onClick={() => { navigate('/daily-tracker'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-orange-500/5 hover:bg-orange-500/10 transition-colors">
-                                    <div className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center"><ClipboardList size={24}/></div>
-                                    <span className="font-bold text-sm">Log Habits</span>
-                                </button>
+                                {isLeadership ? (
+                                    <button onClick={() => { navigate('/performance-logs'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-purple-500/5 hover:bg-purple-500/10 transition-all active:scale-95">
+                                        <div className="w-12 h-12 rounded-full bg-purple-500 text-white flex items-center justify-center shadow-lg shadow-purple-500/20"><UserCheck size={24}/></div>
+                                        <span className="font-bold text-sm">Log Review</span>
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { navigate('/daily-tracker'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-orange-500/5 hover:bg-orange-500/10 transition-all active:scale-95">
+                                        <div className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20"><ClipboardList size={24}/></div>
+                                        <span className="font-bold text-sm">Log Habits</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -191,7 +200,7 @@ export const MainLayout: React.FC = () => {
                 {/* Mobile FAB */}
                 <button 
                     onClick={() => setIsQuickActionOpen(true)}
-                    className="sm:hidden fixed bottom-6 right-6 w-14 h-14 bg-primary text-on-accent rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce-slow"
+                    className="sm:hidden fixed bottom-6 right-6 w-14 h-14 bg-primary text-on-accent rounded-full shadow-2xl flex items-center justify-center z-50 transition-transform active:scale-90"
                 >
                     <Plus size={28} />
                 </button>

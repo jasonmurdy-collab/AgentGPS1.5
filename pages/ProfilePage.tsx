@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Palette, ClipboardCopy, Briefcase, Sun, Moon, Building, Shield, UserCircle, LogOut, KeyRound, Network, RefreshCw, Save, Trash2, Zap } from 'lucide-react';
+import { Palette, ClipboardCopy, Briefcase, Sun, Moon, Building, Shield, UserCircle, LogOut, KeyRound, Network, RefreshCw, Save, Trash2, Zap, MessageSquare, Phone, CheckCircle } from 'lucide-react';
 import type { Team, TeamMember, MarketCenter } from '../types';
 import { Link } from 'react-router-dom';
 
@@ -74,6 +73,71 @@ const ProfileInfoForm: React.FC = () => {
                 <div className="pt-2">
                     <button type="submit" disabled={loading} className={buttonClasses}>
                         {loading ? <Spinner /> : 'Save Changes'}
+                    </button>
+                    <FeedbackMessage {...feedback} />
+                </div>
+            </form>
+        </Card>
+    );
+};
+
+const TwilioSettingsForm: React.FC = () => {
+    const { userData, updateUserProfile } = useAuth();
+    const [sid, setSid] = useState(userData?.twilioSid || '');
+    const [token, setToken] = useState(userData?.twilioToken || '');
+    const [number, setNumber] = useState(userData?.twilioNumber || '');
+    const [loading, setLoading] = useState(false);
+    const [feedback, setFeedback] = useState({ message: '', type: 'success' as 'success' | 'error' });
+
+    useEffect(() => {
+        if (userData) {
+            setSid(userData.twilioSid || '');
+            setToken(userData.twilioToken || '');
+            setNumber(userData.twilioNumber || '');
+        }
+    }, [userData]);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setFeedback({ message: '', type: 'success' });
+        try {
+            // Explicitly pass the Twilio fields
+            await updateUserProfile({
+                twilioSid: sid.trim(),
+                twilioToken: token.trim(),
+                twilioNumber: number.trim()
+            });
+            setFeedback({ message: 'Twilio settings saved successfully!', type: 'success' });
+        } catch (err) {
+            console.error("Twilio Save Error:", err);
+            setFeedback({ message: 'Failed to save settings. Please try again.', type: 'error' });
+        } finally {
+            setLoading(false);
+            setTimeout(() => setFeedback({ message: '', type: 'success' }), 3000);
+        }
+    };
+
+    return (
+        <Card>
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><MessageSquare size={24}/> Communication Settings</h2>
+            <p className="text-sm text-text-secondary mb-4">Connect your Twilio account to send SMS directly to leads and recruits from AgentGPS.</p>
+            <form onSubmit={handleSave} className="space-y-4">
+                <div>
+                    <label htmlFor="twilioSid" className={labelClasses}>Twilio Account SID</label>
+                    <input type="text" id="twilioSid" value={sid} onChange={e => setSid(e.target.value)} className={inputClasses} placeholder="AC..." />
+                </div>
+                <div>
+                    <label htmlFor="twilioToken" className={labelClasses}>Twilio Auth Token</label>
+                    <input type="password" id="twilioToken" value={token} onChange={e => setToken(e.target.value)} className={inputClasses} placeholder="••••••••" />
+                </div>
+                <div>
+                    <label htmlFor="twilioNumber" className={labelClasses}>Twilio Phone Number</label>
+                    <input type="text" id="twilioNumber" value={number} onChange={e => setNumber(e.target.value)} className={inputClasses} placeholder="+1..." />
+                </div>
+                <div className="pt-2">
+                    <button type="submit" disabled={loading} className={buttonClasses}>
+                        {loading ? <Spinner /> : (userData?.twilioSid ? 'Update Twilio Connection' : 'Connect Twilio')}
                     </button>
                     <FeedbackMessage {...feedback} />
                 </div>
@@ -503,6 +567,7 @@ const ProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           <div className="lg:col-span-2 space-y-6">
             <ProfileInfoForm />
+            <TwilioSettingsForm />
             <TeamManagement />
             <MarketCenterAffiliation />
             <IntegrationsManagement />
