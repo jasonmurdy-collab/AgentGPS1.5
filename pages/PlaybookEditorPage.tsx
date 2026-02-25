@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, P } from '../contexts/AuthContext';
@@ -8,8 +7,8 @@ import { doc, getDoc, setDoc, serverTimestamp, Timestamp, collection } from 'fir
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { Playbook, Module, Lesson, QuizContent, ChecklistContent, QuizQuestion, ChecklistItem, QuizQuestionOption, Team, MarketCenter, SubmissionRequirement } from '../types';
-import { Save, Plus, Trash2, Edit, ChevronUp, ChevronDown, Link, Video, FileText, BrainCircuit, ListChecks, CheckSquare, Sparkles, GripVertical, ClipboardSignature, Presentation, Upload } from 'lucide-react';
-import { generateQuiz, generateRolePlayScenario } from '../lib/gemini';
+import { Save, Plus, Trash2, Edit, ChevronUp, ChevronDown, Link, Video, FileText, BrainCircuit, ListChecks, CheckSquare, Sparkles, GripVertical, ClipboardSignature, Presentation, Upload, Headphones } from 'lucide-react';
+import { generatePlaybookFromOutline, generateGoalSuggestions, generateRolePlayScenario, generateQuiz } from '../lib/gemini';
 import { createPortal } from 'react-dom';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
@@ -216,11 +215,24 @@ const LessonEditor: React.FC<{ lesson: Lesson, onUpdate: (field: keyof Lesson, v
                 <RichTextEditor 
                     content={lesson.content as string} 
                     onChange={html => onUpdate('content', html)} 
-                    placeholder="Enter lesson text here..."
+                    placeholder="Enter lesson text or paste NotebookLM Markdown here..."
                 />
             )}
             {(lesson.type === 'video' || lesson.type === 'link') && (
                 <input type="url" value={lesson.content as string} onChange={e => onUpdate('content', e.target.value)} className="w-full bg-input border border-border rounded-md p-2 text-sm" placeholder={lesson.type === 'video' ? "YouTube URL or Video ID" : "https://example.com/document.pdf"} />
+            )}
+            {lesson.type === 'audio' && (
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Audio URL (NotebookLM Podcast / MP3 / Drive Link)</label>
+                    <input 
+                        type="url" 
+                        value={lesson.content as string} 
+                        onChange={e => onUpdate('content', e.target.value)} 
+                        className="w-full bg-input border border-border rounded-md p-2 text-sm" 
+                        placeholder="https://notebooklm.google.com/... or Google Drive Link" 
+                    />
+                    <p className="text-xs text-text-secondary mt-1">Paste a direct MP3 link or a Google Drive link to your NotebookLM audio overview.</p>
+                </div>
             )}
             {lesson.type === 'presentation' && (
                 <div>
@@ -274,7 +286,8 @@ const LessonEditor: React.FC<{ lesson: Lesson, onUpdate: (field: keyof Lesson, v
 });
 
 const LESSON_TYPE_PALETTE = [
-    { name: 'Text', type: 'text', icon: FileText, defaultTitle: 'New Text Lesson' },
+    { name: 'Text / NotebookLM Notes', type: 'text', icon: FileText, defaultTitle: 'New Lesson' },
+    { name: 'Audio / Podcast', type: 'audio', icon: Headphones, defaultTitle: 'Audio Overview' },
     { name: 'Video', type: 'video', icon: Video, defaultTitle: 'New Video Lesson' },
     { name: 'Link', type: 'link', icon: Link, defaultTitle: 'New Link' },
     { name: 'Slide Deck', type: 'presentation', icon: Presentation, defaultTitle: 'New Presentation' },
@@ -319,7 +332,7 @@ const LessonTile: React.FC<{
     const getIcon = useCallback(() => {
         if (lesson.title.toLowerCase().includes('script')) return ClipboardSignature;
         if (lesson.title.toLowerCase().includes('ai generated')) return Sparkles;
-        return { link: Link, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks, presentation: Presentation, submission: Upload }[lesson.type];
+        return { link: Link, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks, presentation: Presentation, submission: Upload, audio: Headphones }[lesson.type];
     }, [lesson.title, lesson.type]);
     const LessonIcon = getIcon();
 
@@ -504,7 +517,6 @@ const PlaybookEditorPage: React.FC = () => {
             const module = playbook.modules.find(m => m.id === moduleId);
             if (!module) return;
             
-            // Fix the content initialization here to include default properties for SubmissionRequirement
             const initialContent = lessonInfo.type === 'submission' 
                 ? { prompt: '', uploadType: 'text_entry', required: true } as SubmissionRequirement
                 : ((lessonInfo.type === 'quiz' || lessonInfo.type === 'checklist') ? [] : '');

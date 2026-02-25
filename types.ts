@@ -345,7 +345,7 @@ export interface Module {
 export interface Lesson {
   id: string;
   title: string;
-  type: 'text' | 'video' | 'link' | 'quiz' | 'checklist' | 'presentation' | 'submission';
+  type: 'text' | 'video' | 'audio' | 'link' | 'quiz' | 'checklist' | 'presentation' | 'submission';
   content: string | QuizContent | ChecklistContent | SubmissionRequirement;
   order: number;
 }
