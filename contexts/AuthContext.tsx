@@ -19,6 +19,7 @@ import {
     collection, 
     query, 
     where, 
+    or,
     getDocs,
     arrayUnion,
     arrayRemove,
@@ -198,10 +199,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             q = query(usersRef);
         } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
             q = query(usersRef, where('marketCenterId', '==', userData.marketCenterId));
+        } else if (P.isTeamLeader(userData) && userData.teamId) {
+            q = query(usersRef, or(where('teamId', '==', userData.teamId), where('coachId', '==', user.uid)));
         } else if (P.isCoach(userData)) {
             q = query(usersRef, where('coachId', '==', user.uid));
-        } else if (P.isTeamLeader(userData) && userData.teamId) {
-            q = query(usersRef, where('teamId', '==', userData.teamId));
         }
 
         if (!q) {
@@ -645,6 +646,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!db) return;
         const userRef = doc(db, 'users', userId);
         const oldUserDataSnap = await getDoc(userRef);
+        if (!oldUserDataSnap.exists()) {
+            throw new Error(`User document with ID ${userId} does not exist.`);
+        }
         const oldUserData = oldUserDataSnap.data() as TeamMember;
         const batch = writeBatch(db);
         if (oldUserData.role === 'market_center_admin' && oldUserData.marketCenterId) {

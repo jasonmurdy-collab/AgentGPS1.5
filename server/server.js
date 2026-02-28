@@ -13,6 +13,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const { URLSearchParams, URL } = require('url');
 const rateLimit = require('express-rate-limit');
+const twilio = require('twilio');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -125,7 +126,12 @@ app.use('/api-proxy', async (req, res, next) => {
         };
 
         if (['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase())) {
-            axiosConfig.data = req.body;
+            // Explicitly stringify JSON bodies to ensure consistent serialization for Gemini API
+            if (outgoingHeaders['Content-Type'] === 'application/json' && typeof req.body === 'object') {
+                axiosConfig.data = JSON.stringify(req.body);
+            } else {
+                axiosConfig.data = req.body;
+            }
         }
         // For GET, DELETE, etc., axiosConfig.data will remain undefined,
         // and axios will not send a request body.
@@ -171,6 +177,39 @@ app.use('/api-proxy', async (req, res, next) => {
                 res.status(500).json({ error: 'Proxy setup error', message: error.message });
             }
         }
+    }
+});
+
+// Route for sending SMS via Twilio
+app.post('/api/send-sms', async (req, res) => {
+    const { sid, token, from, to, body } = req.body;
+
+    if (!sid || !token || !from || !to || !body) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Missing required parameters: sid, token, from, to, and body are all required.' 
+        });
+    }
+
+    try {
+        const client = twilio(sid, token);
+        const message = await client.messages.create({
+            body: body,
+            from: from,
+            to: to
+        });
+
+        res.status(200).json({ 
+            success: true, 
+            messageSid: message.sid,
+            status: message.status
+        });
+    } catch (error) {
+        console.error('Twilio SMS error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message || 'Failed to send SMS via Twilio API' 
+        });
     }
 });
 
