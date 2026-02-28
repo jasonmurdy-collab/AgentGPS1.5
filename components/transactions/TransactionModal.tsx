@@ -33,34 +33,35 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
         const toInputDate = (dateString: string | undefined) => dateString ? new Date(dateString).toISOString().split('T')[0] : '';
         
         if (isOpen) {
-            setLoading(false);
-            if (transactionToEdit) {
-                setFormData({
-                    teamId: transactionToEdit.teamId,
-                    marketCenterId: transactionToEdit.marketCenterId,
-                    acceptanceDate: toInputDate(transactionToEdit.acceptanceDate),
-                    address: transactionToEdit.address,
-                    type: transactionToEdit.type,
-                    salePrice: transactionToEdit.salePrice,
-                    commissionRate: transactionToEdit.commissionRate,
-                    conditionsDate: toInputDate(transactionToEdit.conditionsDate),
-                    closeDate: toInputDate(transactionToEdit.closeDate),
-                    expiryDate: toInputDate(transactionToEdit.expiryDate),
-                });
-            } else {
-                 setFormData({
-                    teamId: null,
-                    marketCenterId: null,
-                    acceptanceDate: new Date().toISOString().split('T')[0],
-                    address: '',
-                    type: 'Listing Sale',
-                    salePrice: 0,
-                    commissionRate: 2.5,
-                    conditionsDate: '',
-                    closeDate: '',
-                    expiryDate: '',
-                });
-            }
+            setTimeout(() => {
+                if (transactionToEdit) {
+                    setFormData({
+                        teamId: transactionToEdit.teamId,
+                        marketCenterId: transactionToEdit.marketCenterId,
+                        acceptanceDate: toInputDate(transactionToEdit.acceptanceDate),
+                        address: transactionToEdit.address,
+                        type: transactionToEdit.type,
+                        salePrice: transactionToEdit.salePrice,
+                        commissionRate: transactionToEdit.commissionRate,
+                        conditionsDate: toInputDate(transactionToEdit.conditionsDate),
+                        closeDate: toInputDate(transactionToEdit.closeDate),
+                        expiryDate: toInputDate(transactionToEdit.expiryDate),
+                    });
+                } else {
+                     setFormData({
+                        teamId: null,
+                        marketCenterId: null,
+                        acceptanceDate: new Date().toISOString().split('T')[0],
+                        address: '',
+                        type: 'Listing Sale',
+                        salePrice: 0,
+                        commissionRate: 2.5,
+                        conditionsDate: '',
+                        closeDate: '',
+                        expiryDate: '',
+                    });
+                }
+            }, 0);
         }
     }, [isOpen, transactionToEdit]);
 

@@ -1,19 +1,18 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Playbook, Lesson, QuizContent, ChecklistContent, SubmissionRequirement } from '../types';
+import { Playbook, Module, Lesson, QuizContent, ChecklistContent, SubmissionRequirement } from '../types';
 import { 
     ArrowLeft, BookOpen, Link as LinkIcon, Video, FileText, 
     BrainCircuit, ListChecks, CheckSquare, CheckCircle, XCircle, 
     ArrowRight, ArrowLeft as ArrowLeftIcon, ChevronDown, ChevronUp, 
     Presentation, Upload, Eye, ExternalLink, X, AlertTriangle,
-    Maximize2, Minimize2, Share2, Headphones, Expand, Shrink,
-    Menu
+    Maximize2, Minimize2, Copy, Share2
 } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -48,49 +47,6 @@ const parseVideoUrl = (url: string): { type: 'youtube' | 'loom' | 'vimeo' | 'inv
     }
 
     return { type: 'invalid', id: null, embedUrl: null };
-};
-
-// --- AUDIO PLAYER COMPONENT (For NotebookLM Podcasts) ---
-const AudioPlayer: React.FC<{ url: string; title: string }> = ({ url, title }) => {
-    const [isPlaying, setIsPlaying] = useState(false);
-    
-    // Simple logic to try and make Drive links playable audio
-    const playableUrl = useMemo(() => {
-        if (url.includes('drive.google.com') && url.includes('/view')) {
-            return url.replace('/view', '/preview'); // Often works for audio preview
-        }
-        return url;
-    }, [url]);
-
-    return (
-        <div className="w-full bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white flex items-center gap-4">
-                <div className="p-3 bg-white/20 rounded-full backdrop-blur-md">
-                    <Headphones size={24} className="text-white" />
-                </div>
-                <div>
-                    <p className="text-xs font-bold uppercase opacity-80 tracking-widest">Audio Overview</p>
-                    <h3 className="font-bold text-lg">{title}</h3>
-                </div>
-            </div>
-            <div className="p-4 bg-background">
-                <audio 
-                    controls 
-                    className="w-full" 
-                    src={playableUrl}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                >
-                    Your browser does not support the audio element.
-                </audio>
-                {url.includes('drive.google.com') && (
-                    <p className="text-xs text-text-secondary mt-2 text-center">
-                        Having trouble playing? <a href={url} target="_blank" rel="noreferrer" className="text-primary hover:underline">Open in Drive</a>
-                    </p>
-                )}
-            </div>
-        </div>
-    );
 };
 
 const VideoPlayer: React.FC<{ url: string; title: string }> = ({ url, title }) => {
@@ -403,7 +359,6 @@ const QuizViewer: React.FC<{
 
 const PlaybookViewerPage: React.FC = () => {
     const { playbookId } = useParams<{ playbookId: string }>();
-    const navigate = useNavigate();
     const { user, userData, updatePlaybookProgress } = useAuth();
     const [playbook, setPlaybook] = useState<Playbook | null>(null);
     const [loading, setLoading] = useState(true);
@@ -413,10 +368,6 @@ const PlaybookViewerPage: React.FC = () => {
     const [submissionText, setSubmissionText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     
-    // Focus Mode State
-    const [isFocusMode, setIsFocusMode] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true); // For mobile or manual toggle
-
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     const completedLessons = useMemo(() => {
@@ -438,17 +389,15 @@ const PlaybookViewerPage: React.FC = () => {
         return playbook.modules.flatMap(m => m.lessons);
     }, [playbook]);
 
-    const { currentIndex, prevLesson, nextLesson, progressPercentage } = useMemo(() => {
-        if (!activeLesson || allLessonsFlat.length === 0) return { currentIndex: -1, prevLesson: null, nextLesson: null, progressPercentage: 0 };
+    const { currentIndex, prevLesson, nextLesson } = useMemo(() => {
+        if (!activeLesson || allLessonsFlat.length === 0) return { currentIndex: -1, prevLesson: null, nextLesson: null };
         const idx = allLessonsFlat.findIndex(l => l.id === activeLesson.id);
-        const progress = (completedLessons.length / allLessonsFlat.length) * 100;
         return {
             currentIndex: idx,
             prevLesson: idx > 0 ? allLessonsFlat[idx - 1] : null,
             nextLesson: idx < allLessonsFlat.length - 1 ? allLessonsFlat[idx + 1] : null,
-            progressPercentage: progress
         };
-    }, [activeLesson, allLessonsFlat, completedLessons]);
+    }, [activeLesson, allLessonsFlat]);
 
 
     useEffect(() => {
@@ -505,16 +454,13 @@ const PlaybookViewerPage: React.FC = () => {
 
     const renderLessonContent = (lesson: Lesson) => {
         const isCompleted = completedLessons.includes(lesson.id);
-        const canMarkComplete = ['text', 'video', 'link', 'presentation', 'audio'].includes(lesson.type);
+        const canMarkComplete = ['text', 'video', 'link', 'presentation'].includes(lesson.type);
 
         const sanitizedHtml = lesson.type === 'text' ? DOMPurify.sanitize(marked(lesson.content as string)) : '';
         const isDriveLink = lesson.type === 'link' && ((lesson.content as string).includes('drive.google.com') || (lesson.content as string).includes('docs.google.com'));
 
         return (
-            <div className={`space-y-8 ${isFocusMode ? 'animate-in fade-in slide-in-from-bottom-4 duration-500' : ''}`}>
-                {lesson.type === 'audio' && (
-                    <AudioPlayer url={lesson.content as string} title={lesson.title} />
-                )}
+            <>
                 {lesson.type === 'video' && (
                      <VideoPlayer url={lesson.content as string} title={lesson.title} />
                 )}
@@ -554,7 +500,7 @@ const PlaybookViewerPage: React.FC = () => {
                     <SlideViewer content={lesson.content as string} />
                 )}
                 {lesson.type === 'text' && (
-                    <div className="prose dark:prose-invert max-w-none text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                    <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
                 )}
                 {lesson.type === 'quiz' && (
                     <QuizViewer lesson={lesson} completedLessons={completedLessons} onProgressUpdate={handleProgressUpdate} />
@@ -594,12 +540,12 @@ const PlaybookViewerPage: React.FC = () => {
                 )}
                 {canMarkComplete && (
                     <div className="mt-8 pt-6 border-t border-border flex justify-center">
-                        <button onClick={handleMarkComplete} disabled={isCompleted} className={`flex items-center gap-2 py-3 px-8 rounded-full font-bold shadow-lg transition-all ${isCompleted ? 'bg-success text-on-success cursor-default' : 'bg-primary text-on-accent hover:scale-105 active:scale-95'}`}>
-                           <CheckSquare size={18}/> {isCompleted ? 'Lesson Completed' : 'Mark as Complete'}
+                        <button onClick={handleMarkComplete} disabled={isCompleted} className="flex items-center gap-2 py-2 px-6 rounded-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed bg-success text-on-success">
+                           <CheckSquare size={16}/> {isCompleted ? 'Completed' : 'Mark as Complete'}
                         </button>
                     </div>
                 )}
-            </div>
+            </>
         );
     };
     
@@ -607,142 +553,68 @@ const PlaybookViewerPage: React.FC = () => {
     if (error) return <Card className="m-8 text-center text-destructive">{error}</Card>;
     if (!playbook) return null;
     
-    const LessonIcon = { link: LinkIcon, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks, presentation: Presentation, submission: Upload, audio: Headphones };
+    const LessonIcon = { link: LinkIcon, video: Video, text: FileText, quiz: BrainCircuit, checklist: ListChecks, presentation: Presentation, submission: Upload };
     const totalLessons = allLessonsFlat.length;
 
     return (
-        <div className="h-full flex flex-col bg-background relative">
-            {/* Top Navigation Bar (Always Visible) */}
-            <header className="h-16 border-b border-border bg-surface/80 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-30">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/resource-library')} className="p-2 hover:bg-primary/10 rounded-full text-text-secondary transition-colors" title="Back to Library">
-                        <ArrowLeft size={20} />
-                    </button>
-                    {!isFocusMode && (
-                        <h1 className="font-bold text-lg truncate max-w-[200px] sm:max-w-md">{playbook.title}</h1>
-                    )}
-                </div>
-
-                {/* Progress Bar (Centered in Focus Mode) */}
-                <div className={`flex items-center gap-3 transition-all duration-500 ${isFocusMode ? 'flex-1 justify-center max-w-2xl mx-auto' : 'w-1/3 hidden md:flex'}`}>
-                    <div className="flex-1 h-2 bg-border rounded-full overflow-hidden">
-                        <div className="h-full bg-success transition-all duration-500" style={{ width: `${progressPercentage}%` }}></div>
-                    </div>
-                    <span className="text-xs font-bold text-text-secondary whitespace-nowrap">{Math.round(progressPercentage)}%</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => { setIsFocusMode(!isFocusMode); setIsSidebarOpen(!isFocusMode); }}
-                        className={`p-2 rounded-full transition-colors ${isFocusMode ? 'bg-primary text-on-accent' : 'hover:bg-primary/10 text-text-secondary'}`}
-                        title={isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
-                    >
-                        {isFocusMode ? <Shrink size={20} /> : <Expand size={20} />}
-                    </button>
-                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 hover:bg-primary/10 rounded-full text-text-secondary">
-                        <Menu size={20} />
-                    </button>
-                </div>
+        <div className="h-full flex flex-col">
+            <header className="p-4 sm:p-6 lg:p-8">
+                <Link to="/resource-library" className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline mb-4"><ArrowLeft size={16}/> Back to My Growth</Link>
+                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">{playbook.title}</h1>
+                <p className="text-lg text-text-secondary mt-1">{playbook.description}</p>
             </header>
             
-            <div className="flex-1 flex overflow-hidden relative">
-                {/* Sidebar Navigation */}
-                <nav 
-                    className={`
-                        fixed md:relative z-20 h-full bg-surface border-r border-border transition-all duration-300 ease-in-out flex flex-col
-                        ${isSidebarOpen && !isFocusMode ? 'w-80 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 md:w-0 overflow-hidden'}
-                    `}
-                >
-                    <div className="p-4 border-b border-border bg-surface sticky top-0 z-10">
-                        <h2 className="font-bold text-lg">Course Content</h2>
-                        <p className="text-xs text-text-secondary">{completedLessons.length} / {totalLessons} lessons completed</p>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-4">
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden px-4 sm:px-6 lg:px-8 pb-8 gap-6">
+                <nav className="w-full md:w-1/3 lg:w-1/4 bg-surface rounded-2xl p-4 flex flex-col overflow-y-auto">
+                    <h2 className="text-lg font-bold mb-3 flex-shrink-0">Contents</h2>
+                    <div className="flex-grow overflow-y-auto pr-2 space-y-4">
                         {playbook.modules.map(module => (
-                            <div key={module.id} className="mb-2">
-                                <button 
-                                    onClick={() => setExpandedModules(p => ({...p, [module.id]: !p[module.id]}))} 
-                                    className="w-full flex justify-between items-center p-2 hover:bg-primary/5 rounded-lg transition-colors text-left"
-                                >
-                                    <span className="font-bold text-sm text-text-primary">{module.title}</span>
-                                    <ChevronDown size={16} className={`transition-transform duration-200 text-text-secondary ${expandedModules[module.id] ? 'rotate-180' : ''}`} />
+                            <div key={module.id}>
+                                <button onClick={() => setExpandedModules(p => ({...p, [module.id]: !p[module.id]}))} className="w-full flex justify-between items-center font-semibold text-text-primary">
+                                    {module.title}
+                                    <ChevronDown size={16} className={`transition-transform ${expandedModules[module.id] ? 'rotate-180' : ''}`} />
                                 </button>
-                                
-                                <div className={`space-y-1 overflow-hidden transition-all duration-300 ${expandedModules[module.id] ? 'max-h-[1000px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                                    {module.lessons.map(lesson => {
-                                        const Icon = LessonIcon[lesson.type];
-                                        const isCompleted = completedLessons.includes(lesson.id);
-                                        const isActive = activeLesson?.id === lesson.id;
-                                        
-                                        return (
-                                            <button 
-                                                key={lesson.id} 
-                                                onClick={() => { setActiveLesson(lesson); if (window.innerWidth < 768) setIsSidebarOpen(false); }} 
-                                                className={`w-full text-left flex items-center gap-3 p-2 pl-4 rounded-lg text-sm transition-all border-l-2 ${isActive ? 'bg-primary/10 text-primary border-primary font-semibold' : 'border-transparent text-text-secondary hover:bg-primary/5 hover:text-text-primary'}`}
-                                            >
-                                                {isCompleted ? <CheckCircle size={14} className="text-success flex-shrink-0" /> : <Icon size={14} className="opacity-70 flex-shrink-0" />}
-                                                <span className="truncate">{lesson.title}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                {expandedModules[module.id] && (
+                                    <div className="mt-2 space-y-1 pl-2 border-l-2 border-border">
+                                        {module.lessons.map(lesson => {
+                                            const Icon = LessonIcon[lesson.type];
+                                            const isCompleted = completedLessons.includes(lesson.id);
+                                            return (
+                                                <button key={lesson.id} onClick={() => setActiveLesson(lesson)} className={`w-full text-left flex items-center gap-2 p-2 rounded-md text-sm transition-colors ${activeLesson?.id === lesson.id ? 'bg-primary/10 text-primary' : 'hover:bg-primary/5'}`}>
+                                                    {isCompleted ? <CheckCircle size={14} className="text-success flex-shrink-0" /> : <Icon size={14} className="text-text-secondary flex-shrink-0" />}
+                                                    <span className={`truncate ${isCompleted ? 'text-text-secondary' : ''}`}>{lesson.title}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
                 </nav>
 
-                {/* Main Content Area */}
-                <main className={`flex-1 overflow-y-auto bg-background transition-all duration-300 ${isFocusMode ? 'px-0' : 'px-0'}`}>
+                <main className="w-full md:w-2/3 lg:w-3/4 bg-surface rounded-2xl flex flex-col overflow-hidden">
                     {activeLesson ? (
-                        <div className={`mx-auto transition-all duration-500 ${isFocusMode ? 'max-w-3xl py-12 px-6' : 'max-w-5xl py-8 px-4 md:px-8'}`}>
-                            {isFocusMode && (
-                                <div className="mb-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                    <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Current Lesson</p>
-                                    <h2 className="text-3xl md:text-4xl font-black text-text-primary">{activeLesson.title}</h2>
-                                </div>
-                            )}
-                            
-                            {!isFocusMode && (
-                                <div className="mb-6 pb-4 border-b border-border">
-                                    <h2 className="text-2xl font-bold text-text-primary">{activeLesson.title}</h2>
-                                </div>
-                            )}
-
-                            <div className="min-h-[400px]">
+                        <>
+                            <div className="p-6 flex-grow overflow-y-auto">
+                                <h2 className="text-3xl font-bold mb-6">{activeLesson.title}</h2>
                                 {renderLessonContent(activeLesson)}
                             </div>
-
-                            {/* Navigation Footer */}
-                            <div className="mt-16 pt-8 border-t border-border flex justify-between items-center">
-                                <button 
-                                    onClick={() => setActiveLesson(prevLesson)} 
-                                    disabled={!prevLesson} 
-                                    className="flex items-center gap-2 py-3 px-5 rounded-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface border border-transparent hover:border-border transition-all"
-                                >
-                                   <ArrowLeftIcon size={18}/> <span className="hidden sm:inline">Previous</span>
+                            <div className="flex justify-between items-center p-4 border-t border-border flex-shrink-0">
+                                <button onClick={() => setActiveLesson(prevLesson)} disabled={!prevLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
+                                   <ArrowLeftIcon size={16}/> Previous
                                 </button>
-                                <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">
-                                    {currentIndex + 1} of {totalLessons}
-                                </span>
-                                <button 
-                                    onClick={() => setActiveLesson(nextLesson)} 
-                                    disabled={!nextLesson} 
-                                    className="flex items-center gap-2 py-3 px-5 rounded-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed bg-primary text-on-accent hover:bg-opacity-90 hover:scale-105 transition-all shadow-lg shadow-primary/20"
-                                >
-                                   <span className="hidden sm:inline">Next Lesson</span> <ArrowRight size={18}/>
+                                <span className="text-sm text-text-secondary">{currentIndex + 1} / {totalLessons}</span>
+                                <button onClick={() => setActiveLesson(nextLesson)} disabled={!nextLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
+                                   Next <ArrowRight size={16}/>
                                 </button>
                             </div>
-                        </div>
+                        </>
                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                            <div className="w-24 h-24 bg-primary/5 rounded-full flex items-center justify-center mb-6 animate-bounce-slow">
-                                <BookOpen size={48} className="text-primary opacity-50" />
-                            </div>
-                            <h2 className="text-3xl font-bold text-text-primary mb-2">Welcome to {playbook.title}</h2>
-                            <p className="text-text-secondary max-w-md">Select a lesson from the menu to begin your learning journey.</p>
-                            <button onClick={() => setIsSidebarOpen(true)} className="mt-8 md:hidden px-6 py-3 bg-primary text-on-accent rounded-xl font-bold">
-                                Open Menu
-                            </button>
+                        <div className="flex flex-col items-center justify-center h-full text-center">
+                            <BookOpen size={48} className="text-text-secondary mb-4" />
+                            <h2 className="text-2xl font-bold">Welcome to the Playbook</h2>
+                            <p className="text-text-secondary mt-2">Select a lesson from the left to get started.</p>
                         </div>
                     )}
                 </main>

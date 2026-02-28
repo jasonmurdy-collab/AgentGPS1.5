@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Palette, ClipboardCopy, Briefcase, Sun, Moon, Building, Shield, UserCircle, LogOut, KeyRound, Network, RefreshCw, Save, Trash2, Zap, MessageSquare, Phone, CheckCircle } from 'lucide-react';
+import { Palette, ClipboardCopy, Briefcase, Sun, Moon, Building, Shield, UserCircle, LogOut, KeyRound, Network, RefreshCw, Save, Trash2, MessageSquare } from 'lucide-react';
 import type { Team, TeamMember, MarketCenter } from '../types';
 import { Link } from 'react-router-dom';
 
@@ -41,7 +41,7 @@ const ProfileInfoForm: React.FC = () => {
         try {
             await updateUserProfile({ name, bio });
             setFeedback({ message: 'Profile updated successfully!', type: 'success' });
-        } catch (err) {
+        } catch {
             setFeedback({ message: 'Failed to update profile.', type: 'error' });
         } finally {
             setLoading(false);
@@ -174,7 +174,7 @@ const PasswordUpdateForm: React.FC = () => {
             await updatePassword(passwords.newPassword);
             setFeedback({ message: 'Password updated successfully!', type: 'success' });
             setPasswords({ newPassword: '', confirmPassword: '' });
-        } catch (error) {
+        } catch {
             setFeedback({ message: 'Failed to update password. You may need to sign in again.', type: 'error' });
         } finally {
             setLoading(false);
@@ -206,27 +206,27 @@ const PasswordUpdateForm: React.FC = () => {
 };
 
 
+const ThemeButton: React.FC<{ theme: 'light' | 'dark', icon: React.ElementType, label: string, currentTheme: string, onUpdate: (theme: 'light' | 'dark') => void }> = ({ theme, icon: Icon, label, currentTheme, onUpdate }) => (
+    <button
+        onClick={() => onUpdate(theme)}
+        className={`flex-1 p-4 rounded-lg text-center transition-all duration-200 border-2 flex flex-col items-center justify-center gap-2 ${currentTheme === theme ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/50'}`}
+    >
+        <Icon size={24} />
+        <h3 className="font-bold text-lg">{label}</h3>
+    </button>
+);
+
 const AppearanceSettings: React.FC = () => {
     const { userData, updateTheme } = useAuth();
     const currentTheme = userData?.theme || 'light';
-
-    const ThemeButton: React.FC<{ theme: 'light' | 'dark', icon: React.ElementType, label: string }> = ({ theme, icon: Icon, label }) => (
-        <button
-            onClick={() => updateTheme(theme)}
-            className={`flex-1 p-4 rounded-lg text-center transition-all duration-200 border-2 flex flex-col items-center justify-center gap-2 ${currentTheme === theme ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/50'}`}
-        >
-            <Icon size={24} />
-            <h3 className="font-bold text-lg">{label}</h3>
-        </button>
-    );
 
     return (
         <Card>
             <h2 className="text-2xl font-bold mb-2 flex items-center gap-2"><Palette size={24}/> Appearance</h2>
             <p className="text-text-secondary mb-6 text-sm">Personalize the look and feel of your workspace.</p>
             <div className="flex items-center gap-4">
-                <ThemeButton theme="light" icon={Sun} label="Light Mode" />
-                <ThemeButton theme="dark" icon={Moon} label="Dark Mode" />
+                <ThemeButton theme="light" icon={Sun} label="Light Mode" currentTheme={currentTheme} onUpdate={updateTheme} />
+                <ThemeButton theme="dark" icon={Moon} label="Dark Mode" currentTheme={currentTheme} onUpdate={updateTheme} />
             </div>
         </Card>
     );
@@ -243,11 +243,13 @@ const TeamManagement: React.FC = () => {
 
     useEffect(() => {
         if (!userData?.teamId) {
-            setTeam(null);
-            setMembers([]);
+            setTimeout(() => {
+                setTeam(null);
+                setMembers([]);
+            }, 0);
             return;
         }
-        setLoading(true);
+        setTimeout(() => setLoading(true), 0);
         const fetchTeam = async () => {
             const teamData = await getTeamById(userData.teamId!);
             setTeam(teamData);
@@ -379,7 +381,7 @@ const MarketCenterAffiliation: React.FC = () => {
             const newMcId = selectedMcId === '' ? null : selectedMcId;
             await updateUserMarketCenter(newMcId);
             setFeedback({ message: 'Market Center updated!', type: 'success' });
-        } catch (e) {
+        } catch {
             setFeedback({ message: 'Failed to update.', type: 'error' });
         } finally {
             setSaving(false);
@@ -444,7 +446,7 @@ const IntegrationsManagement: React.FC = () => {
 
     useEffect(() => {
         if (!userData?.zapierApiKey) {
-            setLoadingKey(true);
+            setTimeout(() => setLoadingKey(true), 0);
             regenerateZapierApiKey().then(newKey => {
                 setApiKey(newKey);
                 setLoadingKey(false);

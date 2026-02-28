@@ -32,23 +32,23 @@ const LeaderboardPage: React.FC = () => {
 
     useEffect(() => {
         if (authLoading || loadingAgents || !userData) {
-            setLoading(true);
+            setTimeout(() => setLoading(true), 0);
             return;
         }
 
-        setLoading(true);
+        setTimeout(() => setLoading(true), 0);
         let usersForLeaderboard: TeamMember[] = [];
         const isMcAdmin = userData.role === 'market_center_admin';
         const isProdCoach = userData.role === 'productivity_coach';
 
         if (isMcAdmin && userData.marketCenterId) {
-            setLeaderboardTitle('Market Center Leaderboard');
+            setTimeout(() => setLeaderboardTitle('Market Center Leaderboard'), 0);
             usersForLeaderboard = [...managedAgents, userData];
         } else if (isProdCoach) {
             if (userData.marketCenterId) {
-                setLeaderboardTitle('Market Center Leaderboard');
+                setTimeout(() => setLeaderboardTitle('Market Center Leaderboard'), 0);
             } else {
-                setLeaderboardTitle('Your Stats');
+                setTimeout(() => setLeaderboardTitle('Your Stats'), 0);
             }
             usersForLeaderboard = [...managedAgents, userData];
         } else if (userData.teamId) {
@@ -58,11 +58,13 @@ const LeaderboardPage: React.FC = () => {
             // managedAgents for a team leader are their team members. Add the leader themselves.
             usersForLeaderboard = [...managedAgents, userData];
         } else { // Agent not on a team
-            setLeaderboardTitle('Your Stats');
+            setTimeout(() => setLeaderboardTitle('Your Stats'), 0);
             usersForLeaderboard = [userData];
         }
-        setLeaderboardUsers(usersForLeaderboard);
-        setLoading(false);
+        setTimeout(() => {
+            setLeaderboardUsers(usersForLeaderboard);
+            setLoading(false);
+        }, 0);
 
     }, [userData, authLoading, loadingAgents, getTeamById, managedAgents]);
 

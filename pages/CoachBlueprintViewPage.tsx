@@ -25,13 +25,17 @@ const CoachBlueprintViewPage: React.FC = () => {
 
     useEffect(() => {
         if (!selectedAgentId) {
-            setBlueprint(null);
-            setKpis({ gci: 0, transactions: 0 });
+            setTimeout(() => {
+                setBlueprint(null);
+                setKpis({ gci: 0, transactions: 0 });
+            }, 0);
             return;
         }
 
-        setLoading(true);
-        setError(null);
+        setTimeout(() => {
+            setLoading(true);
+            setError(null);
+        }, 0);
 
         // Fetch blueprint
         const blueprintDocRef = doc(getFirestoreInstance(), 'orgBlueprints', selectedAgentId);

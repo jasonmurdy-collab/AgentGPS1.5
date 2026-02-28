@@ -6,16 +6,72 @@ import { useGoals } from '../contexts/GoalContext';
 import { WelcomeCard } from '../components/dashboard/WelcomeCard';
 import { GpsSummaryCard } from '../components/dashboard/GpsSummaryCard';
 import { SkeletonCard } from '../components/ui/SkeletonCard';
-import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Plus } from 'lucide-react';
+import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Video } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { useAuth, P } from '../contexts/AuthContext';
 import { DashboardVisualizations } from '../components/dashboard/DashboardVisualizations';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import type { Transaction, Goal, Playbook } from '../types';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import type { Goal, Playbook, LiveSession } from '../types';
 import { GoalModal } from '../components/goals/AddGoalModal';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
 import AnnouncementFeed from '../components/dashboard/AnnouncementFeed';
+import { LiveSessionCard } from '../components/launchpad/LiveSessionCard';
+
+const UpcomingLiveSessions: React.FC = () => {
+    const { userData } = useAuth();
+    const [sessions, setSessions] = useState<LiveSession[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchSessions = async () => {
+            if (!userData) {
+                setLoading(false);
+                return;
+            }
+            const db = getFirestoreInstance();
+            if (!db) return;
+
+            // Fetch sessions for this MC or specific to this user
+            const q = query(
+                collection(db, 'liveSessions'),
+                where('marketCenterId', '==', userData.marketCenterId),
+                where('status', 'in', ['scheduled', 'live']),
+                orderBy('startTime', 'asc'),
+                limit(2)
+            );
+
+            try {
+                const snap = await getDocs(q);
+                setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() } as LiveSession)));
+            } catch (error) {
+                console.error("Error fetching dashboard sessions:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSessions();
+    }, [userData]);
+
+    if (!loading && sessions.length === 0) return null;
+
+    return (
+        <div className="space-y-4">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+                <Video size={20} className="text-primary" /> Upcoming Live Sessions
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {loading ? (
+                    <div className="h-48 bg-surface/50 rounded-2xl animate-pulse border border-border"></div>
+                ) : (
+                    sessions.map(session => (
+                        <LiveSessionCard key={session.id} session={session} />
+                    ))
+                )}
+            </div>
+        </div>
+    );
+};
 
 const MobileQuickActions: React.FC = () => {
     const { userData } = useAuth();
@@ -154,7 +210,7 @@ const DashboardLoadingSkeleton: React.FC = () => (
 
 const DashboardPage: React.FC = () => {
   const { goals, loading: goalsLoading, updateGoal, deleteGoal, toggleGoalArchiveStatus } = useGoals();
-  const { user, userData, loading: authLoading } = useAuth();
+  const { userData, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'visualizations'>('overview');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [goalToEdit, setGoalToEdit] = useState<Goal | null>(null);
@@ -266,6 +322,7 @@ const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-6">
               <MobileQuickActions />
+              <UpcomingLiveSessions />
               <WelcomeCard />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {topGoals.length > 0 ? (

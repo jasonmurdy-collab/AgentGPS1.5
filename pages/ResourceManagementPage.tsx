@@ -143,7 +143,7 @@ const NewAgentResourcesCard: React.FC<{
     const [savingPath, setSavingPath] = useState(false);
 
     useEffect(() => {
-        setAssignPathId(agent.assignedLearningPathId || '');
+        setTimeout(() => setAssignPathId(agent.assignedLearningPathId || ''), 0);
     }, [agent.assignedLearningPathId]);
 
     const handleSavePath = async () => {
@@ -271,7 +271,7 @@ const ResourceManagementPage: React.FC = () => {
             pathSnapshots.forEach(snap => {
                  snap.docs.forEach(doc => {
                     if(!allPaths.has(doc.id)) {
-                        allPaths.set(doc.id, { id: doc.id, ...doc.data() } as LearningPath);
+                        allPaths.set(doc.id, { id: doc.id, ...(doc.data() as any) } as LearningPath);
                     }
                  });
             });

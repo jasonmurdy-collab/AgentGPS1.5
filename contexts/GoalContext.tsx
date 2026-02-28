@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
-import { Goal, GoalType, TeamMember } from '../types';
+import { Goal } from '../types';
 import { useAuth, P } from './AuthContext';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { 
@@ -12,18 +12,14 @@ import {
     updateDoc, 
     increment,
     getDocs,
-    writeBatch,
     serverTimestamp,
     orderBy,
-    getDoc,
     Timestamp,
     deleteDoc,
-    DocumentSnapshot,
-    documentId,
     runTransaction
 } from 'firebase/firestore';
 import { createNotification } from '../lib/notifications';
-import { processGoalDoc, processUserDoc } from '../lib/firestoreUtils';
+import { processGoalDoc } from '../lib/firestoreUtils';
 
 interface GoalContextType {
   goals: Goal[];

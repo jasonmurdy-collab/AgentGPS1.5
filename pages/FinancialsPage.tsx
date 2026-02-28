@@ -138,7 +138,7 @@ const BudgetTabContent: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user) { setLoading(false); return; }
+        if (!user) { setTimeout(() => setLoading(false), 0); return; }
         getBudgetModelForUser(user.uid).then(data => {
             setBudgetData(data);
             setLoading(false);
@@ -170,7 +170,7 @@ const FinancialsPage: React.FC = () => {
     const [loadingProfile, setLoadingProfile] = useState(true);
 
     useEffect(() => {
-        if (!user) { setLoadingProfile(false); return; }
+        if (!user) { setTimeout(() => setLoadingProfile(false), 0); return; }
         getCommissionProfileForUser(user.uid).then(profile => {
             setCommissionProfile(profile);
             setLoadingProfile(false);
@@ -205,14 +205,6 @@ const FinancialsPage: React.FC = () => {
             await deleteTransaction(id);
         }
     };
-    
-    const TabButton: React.FC<{ tabId: 'transactions' | 'budget' | 'profile'; children: React.ReactNode }> = ({ tabId, children }) => (
-        <button
-            onClick={() => setActiveTab(tabId)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === tabId ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
-            {children}
-        </button>
-    );
 
     return (
         <div className="h-full flex flex-col">
@@ -230,9 +222,21 @@ const FinancialsPage: React.FC = () => {
                     )}
                 </div>
                  <div className="mt-6 flex items-center gap-2 p-1 bg-surface rounded-lg w-fit">
-                    <TabButton tabId="transactions"><Briefcase size={16}/> My Transactions</TabButton>
-                    <TabButton tabId="budget"><Calculator size={16}/> Budget Model</TabButton>
-                    <TabButton tabId="profile"><DollarSign size={16}/> Commission Profile</TabButton>
+                    <button
+                        onClick={() => setActiveTab('transactions')}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'transactions' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                        <Briefcase size={16}/> My Transactions
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('budget')}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'budget' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                        <Calculator size={16}/> Budget Model
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('profile')}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'profile' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                        <DollarSign size={16}/> Commission Profile
+                    </button>
                 </div>
             </header>
             

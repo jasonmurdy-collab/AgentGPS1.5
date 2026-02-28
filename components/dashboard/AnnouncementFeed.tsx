@@ -51,7 +51,7 @@ const AnnouncementFeed: React.FC = () => {
 
                 const snapshot = await getDocs(q);
                 const data = snapshot.docs.map(doc => {
-                    const d = doc.data();
+                    const d = doc.data() as any;
                     return {
                         id: doc.id,
                         title: d.title,

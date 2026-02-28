@@ -87,7 +87,7 @@ export const processTransactionsForUser = (
 
   const anniversaryDate = new Date(profile.capAnniversaryDate);
   const today = new Date();
-  let anniversaryYearStart = new Date(anniversaryDate);
+  const anniversaryYearStart = new Date(anniversaryDate);
   anniversaryYearStart.setUTCFullYear(today.getUTCFullYear());
   if (today < anniversaryYearStart) {
     anniversaryYearStart.setUTCFullYear(today.getUTCFullYear() - 1);

@@ -9,40 +9,106 @@ import {
     Building, 
     Plus, 
     Trash2, 
-    UserPlus, 
-    X, 
     ClipboardCopy, 
     Link as LinkIcon, 
-    Database, 
-    Download,
-    FileSpreadsheet,
-    Target,
-    Briefcase,
-    Megaphone,
-    Send,
-    Edit,
-    Calendar as CalendarIcon,
-    CheckCircle,
-    Image as ImageIcon,
-    Video as VideoIcon,
-    MinusCircle,
-    Info,
-    ExternalLink,
-    HelpCircle,
-    Network,
-    RefreshCw,
-    Save,
-    Zap,
-    // Add missing KeyRound icon
-    KeyRound
+    Megaphone, 
+    Send, 
+    Calendar as CalendarIcon, 
+    CheckCircle, 
+    Image as ImageIcon, 
+    Video as VideoIcon, 
+    MinusCircle, 
+    Info, 
+    HelpCircle, 
+    RefreshCw, 
+    Save, 
+    Zap, 
+    KeyRound, 
+    User
 } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
-import { useGoals } from '../contexts/GoalContext';
-import type { MarketCenter, TeamMember, Team, Announcement } from '../types';
+import type { MarketCenter, TeamMember, Announcement, LiveSession } from '../types';
 import { Spinner } from '../components/ui/Spinner';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, getDocs, addDoc, serverTimestamp, orderBy, query, deleteDoc, doc, where, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp, orderBy, query, deleteDoc, doc, where, updateDoc, getDoc, limit } from 'firebase/firestore';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
+import { ScheduleSessionModal } from '../components/launchpad/ScheduleSessionModal';
+
+const LaunchpadIntegrations: React.FC = () => {
+    const [integrations, setIntegrations] = useState<{ google?: boolean; zoom?: boolean }>({
+        google: false,
+        zoom: false
+    });
+
+    const handleConnect = (provider: 'google' | 'zoom') => {
+        // In a real app, this would trigger the OAuth flow
+        // For this demo, we'll simulate a successful connection
+        alert(`Connecting to ${provider}... In a production environment, this would open the ${provider} OAuth consent screen.`);
+        setIntegrations(prev => ({ ...prev, [provider]: true }));
+    };
+
+    const handleDisconnect = (provider: 'google' | 'zoom') => {
+        if (window.confirm(`Are you sure you want to disconnect ${provider}?`)) {
+            setIntegrations(prev => ({ ...prev, [provider]: false }));
+        }
+    };
+
+    return (
+        <Card className="mt-6">
+            <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-accent-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-accent-primary/20">
+                    <VideoIcon size={24}/>
+                </div>
+                <div>
+                    <h2 className="text-2xl font-bold">Launchpad Integrations</h2>
+                    <p className="text-sm text-text-secondary">Connect your video platforms to generate meeting links automatically.</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`p-6 rounded-2xl border-2 transition-all ${integrations.google ? 'border-success bg-success/5' : 'border-border bg-surface'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm border border-border">
+                                <VideoIcon size={20} className="text-blue-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold">Google Meet</h3>
+                                <p className="text-xs text-text-secondary">Google Workspace & Calendar</p>
+                            </div>
+                        </div>
+                        {integrations.google && <CheckCircle size={20} className="text-success" />}
+                    </div>
+                    {integrations.google ? (
+                        <button onClick={() => handleDisconnect('google')} className="w-full py-2 text-xs font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 rounded-lg transition-all">Disconnect</button>
+                    ) : (
+                        <button onClick={() => handleConnect('google')} className="w-full py-2 bg-primary text-on-accent text-xs font-black uppercase tracking-widest rounded-lg hover:bg-opacity-90 transition-all">Connect Google</button>
+                    )}
+                </div>
+
+                <div className={`p-6 rounded-2xl border-2 transition-all ${integrations.zoom ? 'border-success bg-success/5' : 'border-border bg-surface'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
+                                <VideoIcon size={20} className="text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold">Zoom Video</h3>
+                                <p className="text-xs text-text-secondary">Zoom Meetings API</p>
+                            </div>
+                        </div>
+                        {integrations.zoom && <CheckCircle size={20} className="text-success" />}
+                    </div>
+                    {integrations.zoom ? (
+                        <button onClick={() => handleDisconnect('zoom')} className="w-full py-2 text-xs font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 rounded-lg transition-all">Disconnect</button>
+                    ) : (
+                        <button onClick={() => handleConnect('zoom')} className="w-full py-2 bg-primary text-on-accent text-xs font-black uppercase tracking-widest rounded-lg hover:bg-opacity-90 transition-all">Connect Zoom</button>
+                    )}
+                </div>
+            </div>
+        </Card>
+    );
+};
 
 const ConnectionCenter: React.FC = () => {
     const { userData, regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook } = useAuth();
@@ -62,7 +128,6 @@ const ConnectionCenter: React.FC = () => {
 
     useEffect(() => {
         if (!userData?.zapierApiKey) {
-            setLoadingKey(true);
             regenerateZapierApiKey().then(newKey => {
                 setApiKey(newKey);
                 setLoadingKey(false);
@@ -184,6 +249,8 @@ const ConnectionCenter: React.FC = () => {
                     </div>
                 )}
             </Card>
+
+            <LaunchpadIntegrations />
         </div>
     );
 };
@@ -220,7 +287,7 @@ const CommunicationCenter: React.FC = () => {
 
             try {
                 const snap = await getDocs(q);
-                setAnnouncements(snap.docs.map(d => ({id: d.id, ...d.data()} as Announcement)));
+                setAnnouncements(snap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Announcement)));
             } catch (error) {
                 console.error("Error fetching announcements:", error);
             }
@@ -378,6 +445,84 @@ const CommunicationCenter: React.FC = () => {
                 ))}
                 {announcements.length === 0 && <p className="text-sm text-text-secondary">No recent announcements found.</p>}
             </div>
+        </Card>
+    );
+};
+
+const LiveSessionsManagement: React.FC = () => {
+    const [sessions, setSessions] = useState<LiveSession[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchSessions = async () => {
+            const db = getFirestoreInstance();
+            if (!db) return;
+            const q = query(collection(db, 'liveSessions'), orderBy('startTime', 'desc'), limit(10));
+            const snap = await getDocs(q);
+            setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() } as LiveSession)));
+            setLoading(false);
+        };
+        fetchSessions();
+    }, []);
+
+    const handleDelete = async (id: string) => {
+        if (!window.confirm("Cancel this session?")) return;
+        const db = getFirestoreInstance();
+        if (!db) return;
+        await deleteDoc(doc(db, 'liveSessions', id));
+        setSessions(sessions.filter(s => s.id !== id));
+    };
+
+    return (
+        <Card className="mt-6">
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <VideoIcon className="text-accent-secondary" />
+                    <h2 className="text-2xl font-bold">Live Sessions</h2>
+                </div>
+                <button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 bg-primary text-on-accent px-4 py-2 rounded-xl font-bold text-sm hover:bg-opacity-90 transition-all"
+                >
+                    <Plus size={18} /> Schedule New Session
+                </button>
+            </div>
+
+            <div className="space-y-3">
+                {loading ? <Spinner /> : sessions.map(session => (
+                    <div key={session.id} className="flex items-center justify-between p-4 bg-surface-hover rounded-xl border border-border">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${session.sessionType === 'client-consult' ? 'bg-accent-secondary/10 text-accent-secondary' : 'bg-primary/10 text-primary'}`}>
+                                {session.sessionType === 'client-consult' ? <User size={20}/> : <Users size={20}/>}
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-sm">{session.title}</h4>
+                                <p className="text-xs text-text-secondary">
+                                    {new Date(session.startTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${session.status === 'scheduled' ? 'bg-blue-500/10 text-blue-500' : 'bg-success/10 text-success'}`}>
+                                {session.status}
+                            </span>
+                            <button onClick={() => handleDelete(session.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded-full transition-colors">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+                {!loading && sessions.length === 0 && (
+                    <p className="text-sm text-text-secondary text-center py-8">No live sessions scheduled yet.</p>
+                )}
+            </div>
+
+            <ScheduleSessionModal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                onSuccess={(newSession) => setSessions([newSession, ...sessions])}
+            />
         </Card>
     );
 };
@@ -590,15 +735,6 @@ const AdminSettingsPage: React.FC = () => {
     const isSuperAdmin = P.isSuperAdmin(userData);
     const isLeadership = P.isMcAdmin(userData) || P.isCoach(userData);
 
-    const TabButton: React.FC<{ tabId: 'general' | 'integrations'; label: string; icon: React.ElementType }> = ({ tabId, label, icon: Icon }) => (
-        <button
-            onClick={() => setActiveTab(tabId)}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === tabId ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-secondary hover:border-border'}`}
-        >
-            <Icon size={16} /> {label}
-        </button>
-    );
-
     return (
         <div className="h-full flex flex-col">
             <header className="p-4 sm:p-6 lg:p-8">
@@ -610,8 +746,18 @@ const AdminSettingsPage: React.FC = () => {
                     {isSuperAdmin ? 'Platform-wide configuration and administration.' : 'Market Center management and communication center.'}
                 </p>
                 <div className="mt-8 flex border-b border-border">
-                    <TabButton tabId="general" label="General Admin" icon={Settings} />
-                    <TabButton tabId="integrations" label="Connection Center" icon={Zap} />
+                    <button
+                        onClick={() => setActiveTab('general')}
+                        className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === 'general' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-secondary hover:border-border'}`}
+                    >
+                        <Settings size={16} /> General Admin
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('integrations')}
+                        className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === 'integrations' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-secondary hover:border-border'}`}
+                    >
+                        <Zap size={16} /> Connection Center
+                    </button>
                 </div>
             </header>
 
@@ -621,6 +767,7 @@ const AdminSettingsPage: React.FC = () => {
                         {isLeadership && (
                             <>
                                 <MarketCenterLeadershipSettings />
+                                <LiveSessionsManagement />
                                 <CommunicationCenter />
                             </>
                         )}

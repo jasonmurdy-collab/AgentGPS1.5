@@ -3,7 +3,7 @@ import { Transaction } from '../types';
 import { useAuth } from './AuthContext';
 import { useGoals } from './GoalContext';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, orderBy, DocumentSnapshot, Timestamp, writeBatch, increment } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, Timestamp, writeBatch, increment } from 'firebase/firestore';
 import { processTransactionDoc } from '../lib/firestoreUtils';
 
 interface TransactionsContextType {
@@ -27,12 +27,10 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     const db = getFirestoreInstance();
 
     if (authLoading || !db) {
-      setInternalLoading(true);
       return;
     }
 
     if (user?.uid) {
-      setInternalLoading(true);
       const transactionsCollectionRef = collection(db, 'transactions');
       const q = query(
         transactionsCollectionRef, 
@@ -52,8 +50,10 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       });
 
     } else {
-      setTransactions([]);
-      setInternalLoading(false);
+      setTimeout(() => {
+        setTransactions([]);
+        setInternalLoading(false);
+      }, 0);
     }
     
     return () => unsubscribe();

@@ -13,19 +13,19 @@ interface RichTextEditorProps {
   editable?: boolean;
 }
 
+// Helper for buttons
+const Btn = ({ onClick, isActive, icon: Icon }: any) => (
+  <button
+    onClick={onClick}
+    className={`p-1.5 rounded hover:bg-primary/10 ${isActive ? 'text-primary bg-primary/10' : 'text-text-secondary'}`}
+    type="button" // Prevent form submission
+  >
+    <Icon size={16} />
+  </button>
+);
+
 const MenuBar = ({ editor }: { editor: any }) => {
   if (!editor) return null;
-
-  // Helper for buttons
-  const Btn = ({ onClick, isActive, icon: Icon }: any) => (
-    <button
-      onClick={onClick}
-      className={`p-1.5 rounded hover:bg-primary/10 ${isActive ? 'text-primary bg-primary/10' : 'text-text-secondary'}`}
-      type="button" // Prevent form submission
-    >
-      <Icon size={16} />
-    </button>
-  );
 
   return (
     <div className="flex items-center gap-1 p-2 border-b border-border bg-surface/50">

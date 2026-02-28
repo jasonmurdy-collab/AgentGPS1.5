@@ -10,13 +10,15 @@
       "DOM",
       "DOM.Iterable"
     ],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": [
-      "dom",
-      "dom.iterable"
-    ],
     "allowJs": true,
-    "jsx": "react-jsx",
-    "noEmit": true
+    "jsx": "react-jsx"
   }
 }

@@ -345,7 +345,7 @@ export interface Module {
 export interface Lesson {
   id: string;
   title: string;
-  type: 'text' | 'video' | 'audio' | 'link' | 'quiz' | 'checklist' | 'presentation' | 'submission';
+  type: 'text' | 'video' | 'link' | 'quiz' | 'checklist' | 'presentation' | 'submission';
   content: string | QuizContent | ChecklistContent | SubmissionRequirement;
   order: number;
 }
@@ -433,4 +433,51 @@ export interface Announcement {
   importance: 'normal' | 'high';
   mediaType: 'none' | 'image' | 'video';
   mediaUrl?: string;
+}
+
+export interface UserIntegration {
+  id: string;
+  userId: string;
+  provider: 'google' | 'zoom';
+  email?: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  scopes: string[];
+}
+
+export interface LiveSession {
+  id: string;
+  title: string;
+  description: string;
+  startTime: string; // ISO Date
+  endTime: string; // ISO Date
+  sessionType: 'client-consult' | 'mc-training';
+  platform: 'google-meet' | 'zoom';
+  meetingUrl: string;
+  hostId: string;
+  hostName: string;
+  marketCenterId: string | null;
+  teamId: string | null;
+  
+  // Audience targeting for LMS
+  targetAudience?: {
+    roles?: TeamMember['role'][];
+    specificAgentIds?: string[];
+  };
+
+  // Client info for 1-on-1
+  clientId?: string;
+  clientName?: string;
+  clientEmail?: string;
+
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  createdAt: string;
+  
+  // Distribution tracking
+  distribution: {
+    emailSent: boolean;
+    notificationSent: boolean;
+    sentAt?: string;
+  };
 }

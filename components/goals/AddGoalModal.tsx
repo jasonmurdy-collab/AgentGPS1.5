@@ -37,31 +37,34 @@ export const GoalModal: React.FC<GoalModalProps> = ({ isOpen, onClose, onSubmit,
 
     useEffect(() => {
       if (isOpen) {
-        setLoading(false);
-        if (goalToEdit) {
-          setGoalTitle(goalToEdit.title);
-          setMetric(goalToEdit.metric);
-          setTargetValue(String(goalToEdit.targetValue));
-          setType(goalToEdit.type);
-          setVisibility(goalToEdit.visibility);
-          setStartDate(goalToEdit.startDate ? new Date(goalToEdit.startDate).toISOString().split('T')[0] : '');
-          setEndDate(goalToEdit.endDate ? new Date(goalToEdit.endDate).toISOString().split('T')[0] : '');
-        } else if (initialGoalData) {
-          setGoalTitle(initialGoalData.title || '');
-          setMetric(initialGoalData.metric || '');
-          if (initialGoalData.type) {
-            setType(initialGoalData.type);
+        setTimeout(() => {
+          if (goalToEdit) {
+            setGoalTitle(goalToEdit.title);
+            setMetric(goalToEdit.metric);
+            setTargetValue(String(goalToEdit.targetValue));
+            setType(goalToEdit.type);
+            setVisibility(goalToEdit.visibility);
+            setStartDate(goalToEdit.startDate ? new Date(goalToEdit.startDate).toISOString().split('T')[0] : '');
+            setEndDate(goalToEdit.endDate ? new Date(goalToEdit.endDate).toISOString().split('T')[0] : '');
+          } else if (initialGoalData) {
+            setGoalTitle(initialGoalData.title || '');
+            setMetric(initialGoalData.metric || '');
+            if (initialGoalData.type) {
+              setType(initialGoalData.type);
+            }
           }
-        }
+        }, 0);
       } else {
         // Reset form when modal closes
-        setGoalTitle('');
-        setMetric('');
-        setTargetValue('');
-        setType(GoalType.Weekly);
-        setVisibility('solo');
-        setStartDate('');
-        setEndDate('');
+        setTimeout(() => {
+          setGoalTitle('');
+          setMetric('');
+          setTargetValue('');
+          setType(GoalType.Weekly);
+          setVisibility('solo');
+          setStartDate('');
+          setEndDate('');
+        }, 0);
       }
     }, [isOpen, initialGoalData, goalToEdit]);
 

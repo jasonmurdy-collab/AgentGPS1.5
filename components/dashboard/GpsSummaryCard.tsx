@@ -15,11 +15,13 @@ export const GpsSummaryCard: React.FC = () => {
 
     useEffect(() => {
         if (!user) {
-            setLoading(false);
+            setTimeout(() => setLoading(false), 0);
             return;
         }
-        setLoading(true);
-        const docRef = doc(getFirestoreInstance(), 'businessGps', user.uid);
+        
+        const db = getFirestoreInstance();
+        if (!db) return;
+        const docRef = doc(db, 'businessGps', user.uid);
         
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {

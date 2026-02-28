@@ -77,12 +77,13 @@ const GoalsPage: React.FC = () => {
             case 'targetValue':
                 processedGoals.sort((a, b) => b.targetValue - a.targetValue);
                 break;
-            case 'progress':
+            case 'progress': {
                 const calculateProgress = (goal: Goal) => goal.targetValue > 0 ? (goal.currentValue / goal.targetValue) * 100 : 0;
                 processedGoals.sort((a, b) => calculateProgress(b) - calculateProgress(a));
                 break;
+            }
             case 'default':
-            default:
+            default: {
                 const typeOrder: Record<GoalType, number> = {
                     [GoalType.Annual]: 1,
                     [GoalType.Quarterly]: 2,
@@ -90,6 +91,7 @@ const GoalsPage: React.FC = () => {
                 };
                 processedGoals.sort((a, b) => typeOrder[a.type] - typeOrder[b.type]);
                 break;
+            }
         }
 
         return processedGoals;

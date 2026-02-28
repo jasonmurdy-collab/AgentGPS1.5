@@ -144,7 +144,7 @@ const CoachHubPage: React.FC = () => {
     }, [loadingAgents, userData, managedAgents, getGoalsForUser, getHabitLogsForManagedUsers, getAllTransactions]);
 
     useEffect(() => {
-        fetchData();
+        setTimeout(() => fetchData(), 0);
     }, [fetchData]);
     
     const filteredAgents = useMemo(() => {

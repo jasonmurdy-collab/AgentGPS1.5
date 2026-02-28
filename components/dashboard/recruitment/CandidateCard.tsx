@@ -1,5 +1,5 @@
 import React, { FC, DragEvent, useCallback } from 'react';
-import type { Candidate, TeamMember } from '../../types';
+import type { Candidate, TeamMember } from '../../../types';
 import { Mail, Phone } from 'lucide-react';
 
 function timeAgo(dateString: string) {

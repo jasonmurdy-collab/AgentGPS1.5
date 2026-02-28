@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, UserCircle, LogOut, ChevronDown, Home, ClipboardList, Users, ListTodo, MoreHorizontal, X, Plus, Target, UserPlus, UserCheck } from 'lucide-react';
+import { Menu, LogOut, ClipboardList, ListTodo, X, Plus, Target, UserPlus, UserCheck } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
 import { logoUrl } from '../assets';
@@ -19,10 +19,8 @@ export const MainLayout: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
     const { userData, logout } = useAuth();
-    const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
     const location = useLocation();
     const navigate = useNavigate();
-    const currentYear = new Date().getFullYear();
 
     const handleSetIsSidebarOpen = useCallback((isOpen: boolean) => {
         setIsSidebarOpen(isOpen);
@@ -49,20 +47,6 @@ export const MainLayout: React.FC = () => {
         if (P.isRecruiter(userData)) return recruiterNavSections;
         return agentNavSections;
     }, [userData]);
-
-    useEffect(() => {
-        if (navSections.length > 0) {
-            const initialState: Record<string, boolean> = {};
-            navSections.forEach((section) => {
-                initialState[section.title] = true; // Default all hubs/sections to expanded for clarity
-            });
-            setExpandedSections(initialState);
-        }
-    }, [navSections]);
-
-    const handleToggleSection = useCallback((title: string) => {
-        setExpandedSections(prev => ({ ...prev, [title]: !prev[title] }));
-    }, []);
 
     const isLeadership = P.isTeamLeader(userData) || P.isCoach(userData);
 

@@ -26,20 +26,13 @@ import {
     writeBatch,
     documentId,
     onSnapshot,
-    Timestamp,
     serverTimestamp,
     addDoc,
-    increment,
     orderBy,
-    limit,
-    deleteDoc,
-    DocumentSnapshot,
-    runTransaction,
-    getFirestore 
+    deleteDoc
 } from 'firebase/firestore';
-import { createNotification } from '../lib/notifications';
-import { processDailyTrackerDoc, processTransactionDoc, processNotificationDoc, processCommissionProfileDoc, processUserDoc, processTeamDoc, processPerformanceLogDoc, processPlaybookDoc, processClientLeadDoc, processClientLeadActivityDoc, processTodoItemDoc, processLearningPathDoc } from '../lib/firestoreUtils';
-import type { Team, TeamMember, NewAgentResources, NewAgentGoalTemplate, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, ProspectingSession, MarketCenter, Goal, Lesson, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem, Priority, LearningPath } from '../types';
+import { processDailyTrackerDoc, processTransactionDoc, processCommissionProfileDoc, processUserDoc, processTeamDoc, processPerformanceLogDoc, processPlaybookDoc, processClientLeadDoc, processClientLeadActivityDoc, processTodoItemDoc } from '../lib/firestoreUtils';
+import type { Team, TeamMember, NewAgentResources, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, MarketCenter, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem } from '../types';
 
 export const P = {
   isSuperAdmin: (user: TeamMember | null): boolean => !!user?.isSuperAdmin,

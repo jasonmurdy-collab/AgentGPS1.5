@@ -3,21 +3,21 @@ import React from 'react';
 import { Card } from '../components/ui/Card';
 import { Shield } from 'lucide-react';
 
+const Section: React.FC<{title: string; children: React.ReactNode}> = ({ title, children }) => (
+    <div className="mb-6">
+        <h2 className="text-2xl font-bold border-b border-border pb-2 mb-3">{title}</h2>
+        <div className="space-y-3 text-text-secondary">{children}</div>
+    </div>
+);
+
+const SubSection: React.FC<{title: string; children: React.ReactNode}> = ({ title, children }) => (
+    <div className="pl-4 border-l-2 border-primary/20">
+        <h3 className="text-lg font-semibold text-text-primary mb-1">{title}</h3>
+        <div className="space-y-2">{children}</div>
+    </div>
+);
+
 const PrivacyPolicyPage: React.FC = () => {
-    
-    const Section: React.FC<{title: string; children: React.ReactNode}> = ({ title, children }) => (
-        <div className="mb-6">
-            <h2 className="text-2xl font-bold border-b border-border pb-2 mb-3">{title}</h2>
-            <div className="space-y-3 text-text-secondary">{children}</div>
-        </div>
-    );
-    
-    const SubSection: React.FC<{title: string; children: React.ReactNode}> = ({ title, children }) => (
-        <div className="pl-4 border-l-2 border-primary/20">
-            <h3 className="text-lg font-semibold text-text-primary mb-1">{title}</h3>
-            <div className="space-y-2">{children}</div>
-        </div>
-    );
 
   return (
     <div className="h-full flex flex-col">

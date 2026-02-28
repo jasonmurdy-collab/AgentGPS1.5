@@ -1,5 +1,5 @@
 {
   "name": "Agent GPS 1.5",
-  "description": "A basic React application demonstrating integration with the Gemini API for text generation. Provides a simple input field, a submit button, and displays the AI's response with a clean, responsive UI.",
+  "description": "A comprehensive real estate coaching and accountability platform (AgentGPS) featuring goal tracking, business GPS, financial modeling, and live training integration.",
   "requestFramePermissions": []
 }

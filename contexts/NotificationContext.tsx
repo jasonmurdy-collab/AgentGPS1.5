@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, getDocs, orderBy, Timestamp, DocumentSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, orderBy } from 'firebase/firestore';
 import type { Notification } from '../types';
 import { processNotificationDoc } from '../lib/firestoreUtils';
 
@@ -23,16 +23,16 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     useEffect(() => {
         const db = getFirestoreInstance();
         if (authLoading || !db) {
-            setLoading(true);
             return;
         }
         if (!user) {
-            setNotifications([]);
-            setLoading(false);
+            setTimeout(() => {
+                setNotifications([]);
+                setLoading(false);
+            }, 0);
             return;
         }
 
-        setLoading(true);
         const notificationsRef = collection(db, 'notifications');
         const q = query(
             notificationsRef, 

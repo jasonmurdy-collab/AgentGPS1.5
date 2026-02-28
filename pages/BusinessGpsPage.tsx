@@ -228,7 +228,6 @@ const BusinessGpsPage: React.FC = () => {
 
     useEffect(() => {
         if (!user) return;
-        setLoading(true);
         const docRef = doc(getFirestoreInstance(), 'businessGps', user.uid);
         getDoc(docRef).then(docSnap => {
             if (docSnap.exists()) {
@@ -309,10 +308,6 @@ const BusinessGpsPage: React.FC = () => {
         }
     };
     
-    const TabButton: React.FC<{ tabId: string, children: React.ReactNode }> = ({ tabId, children }) => (
-        <button onClick={() => setActiveTab(tabId)} className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${activeTab === tabId ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary'}`}>{children}</button>
-    );
-
     if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
 
     return (
@@ -330,7 +325,22 @@ const BusinessGpsPage: React.FC = () => {
                 </div>
             </header>
 
-            <div className="px-4 sm:px-6 lg:px-8"><div className="flex border-b border-border -mx-4 px-4 overflow-x-auto"><TabButton tabId="economic"><DollarSign size={16}/> Economic Model</TabButton><TabButton tabId="gps"><Compass size={16}/> GPS</TabButton></div></div>
+            <div className="px-4 sm:px-6 lg:px-8">
+                <div className="flex border-b border-border -mx-4 px-4 overflow-x-auto">
+                    <button 
+                        onClick={() => setActiveTab('economic')} 
+                        className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'economic' ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary'}`}
+                    >
+                        <DollarSign size={16}/> Economic Model
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('gps')} 
+                        className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'gps' ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary'}`}
+                    >
+                        <Compass size={16}/> GPS
+                    </button>
+                </div>
+            </div>
 
             <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
                 {activeTab === 'economic' && <Suspense fallback={<Spinner/>}><EconomicModelCalculator data={economicModelData} onDataChange={setEconomicModelData} calculations={calculations} /></Suspense>}

@@ -175,4 +175,11 @@ const CommunityPage: React.FC = () => {
                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-3"><Globe size={40} />Community</h1>
                 <p className="text-lg text-text-secondary mt-1">Engage with team members and see public goals from the wider agent community.</p>
             </header>
-            <main className="flex-1 overflow-y-auto px-4
+            <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
+                <CommunityGoals />
+            </main>
+        </div>
+    );
+};
+
+export default CommunityPage;
