@@ -14,9 +14,45 @@ const LoginPage: React.FC = () => {
     const [agreed, setAgreed] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { signInWithEmail, signUpWithEmail } = useAuth();
+    const { signInWithEmail, signUpWithEmail, mcBranding } = useAuth();
     const location = useLocation();
     const [signupParams, setSignupParams] = useState<{ role?: string, teamId?: string, mcId?: string }>({});
+
+    // Effect for applying market center branding
+    React.useLayoutEffect(() => {
+        const root = document.documentElement;
+        if (mcBranding) {
+            if (mcBranding.colors.primary) {
+                root.style.setProperty('--color-primary', mcBranding.colors.primary);
+                
+                // Calculate contrast color for text on primary background
+                const hex = mcBranding.colors.primary.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+                root.style.setProperty('--color-on-primary', (yiq >= 128) ? '#000000' : '#FFFFFF');
+            }
+            if (mcBranding.colors.secondary) root.style.setProperty('--color-secondary', mcBranding.colors.secondary);
+            if (mcBranding.colors.accent) root.style.setProperty('--color-accent-bg', mcBranding.colors.accent);
+            if (mcBranding.colors.surface) root.style.setProperty('--color-surface', mcBranding.colors.surface);
+            
+            if (mcBranding.typography.headingFont) root.style.setProperty('--font-heading', mcBranding.typography.headingFont);
+            if (mcBranding.typography.bodyFont) root.style.setProperty('--font-body', mcBranding.typography.bodyFont);
+
+            if (mcBranding.style?.borderRadius) root.style.setProperty('--border-radius', mcBranding.style.borderRadius);
+        } else {
+            // Reset to defaults
+            root.style.removeProperty('--color-primary');
+            root.style.removeProperty('--color-on-primary');
+            root.style.removeProperty('--color-secondary');
+            root.style.removeProperty('--color-accent-bg');
+            root.style.removeProperty('--color-surface');
+            root.style.removeProperty('--font-heading');
+            root.style.removeProperty('--font-body');
+            root.style.removeProperty('--border-radius');
+        }
+    }, [mcBranding]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -74,7 +110,7 @@ const LoginPage: React.FC = () => {
         <div className="flex items-center justify-center min-h-screen bg-background p-4">
             <div className="w-full max-w-md mx-auto">
                 <div className="text-center mb-8">
-                    <img src={logoUrl} alt="AgentGPS Logo" className="mx-auto h-20 w-auto mb-3 logo-img" />
+                    <img src={mcBranding?.logoUrl || logoUrl} alt="AgentGPS Logo" className="mx-auto h-20 w-auto mb-3 logo-img" />
                     <h1 className="text-4xl font-black text-text-primary tracking-tighter">AgentGPS</h1>
                     <p className="text-text-secondary mt-1">Navigate Your Path to Success</p>
                 </div>

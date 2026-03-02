@@ -17,19 +17,6 @@ import {
     superAdminNavSections
 } from '../navigation';
 
-const getContrastColor = (hex: string) => {
-    if (!hex) return '#FFFFFF';
-    // Remove hash if present
-    const cleanHex = hex.startsWith('#') ? hex.slice(1) : hex;
-    if (cleanHex.length !== 6) return '#FFFFFF';
-    
-    const r = parseInt(cleanHex.slice(0, 2), 16);
-    const g = parseInt(cleanHex.slice(2, 4), 16);
-    const b = parseInt(cleanHex.slice(4, 6), 16);
-    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return (yiq >= 128) ? '#000000' : '#FFFFFF';
-};
-
 export const MainLayout: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
@@ -115,12 +102,16 @@ export const MainLayout: React.FC = () => {
         if (mcBranding) {
             if (mcBranding.colors.primary) {
                 root.style.setProperty('--color-primary', mcBranding.colors.primary);
-                root.style.setProperty('--color-on-primary', getContrastColor(mcBranding.colors.primary));
+                
+                // Calculate contrast color for text on primary background
+                const hex = mcBranding.colors.primary.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+                root.style.setProperty('--color-on-primary', (yiq >= 128) ? '#000000' : '#FFFFFF');
             }
-            if (mcBranding.colors.secondary) {
-                root.style.setProperty('--color-secondary', mcBranding.colors.secondary);
-                root.style.setProperty('--color-on-secondary', getContrastColor(mcBranding.colors.secondary));
-            }
+            if (mcBranding.colors.secondary) root.style.setProperty('--color-secondary', mcBranding.colors.secondary);
             if (mcBranding.colors.accent) root.style.setProperty('--color-accent-bg', mcBranding.colors.accent);
             if (mcBranding.colors.surface) root.style.setProperty('--color-surface', mcBranding.colors.surface);
             
@@ -133,7 +124,6 @@ export const MainLayout: React.FC = () => {
             root.style.removeProperty('--color-primary');
             root.style.removeProperty('--color-on-primary');
             root.style.removeProperty('--color-secondary');
-            root.style.removeProperty('--color-on-secondary');
             root.style.removeProperty('--color-accent-bg');
             root.style.removeProperty('--color-surface');
             root.style.removeProperty('--font-heading');
