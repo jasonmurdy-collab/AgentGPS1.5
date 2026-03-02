@@ -1,10 +1,10 @@
 
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, P } from '../contexts/AuthContext';
 import { getFirestoreInstance } from '../firebaseConfig'; // Fix: Import getFirestoreInstance
-import { doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, or, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { LearningPath, Playbook } from '../types';
@@ -33,7 +33,11 @@ const LearningPathEditorPage: React.FC = () => {
             const docRef = doc(getFirestoreInstance(), 'learningPaths', pathId); // Fix: Use getFirestoreInstance()
             const docSnap = await getDoc(docRef);
             const data = docSnap.data();
-            if (docSnap.exists() && data && data.creatorId === user.uid) {
+            const isCreator = data?.creatorId === user.uid;
+            const isMcStaff = data?.marketCenterId && data.marketCenterId === userData?.marketCenterId && P.isCoach(userData);
+            const isTeamStaff = data?.teamId && data.teamId === userData?.teamId && P.isTeamLeader(userData);
+
+            if (docSnap.exists() && (isCreator || isMcStaff || isTeamStaff || P.isSuperAdmin(userData))) {
                 setPath(processLearningPathDoc(docSnap));
             } else {
                 setError('Learning Path not found or permission denied.');
@@ -41,14 +45,31 @@ const LearningPathEditorPage: React.FC = () => {
             setLoading(false);
         };
 
-        const q = query(collection(getFirestoreInstance(), 'playbooks'), where('creatorId', '==', user.uid)); // Fix: Use getFirestoreInstance()
+        const playbooksRef = collection(getFirestoreInstance(), 'playbooks');
+        let q;
+        if (P.isSuperAdmin(userData)) {
+            q = query(playbooksRef);
+        } else if (P.isCoach(userData) && userData?.marketCenterId) {
+            q = query(playbooksRef, or(
+                where('creatorId', '==', user.uid),
+                where('marketCenterId', '==', userData.marketCenterId)
+            ));
+        } else if (userData?.teamId) {
+            q = query(playbooksRef, or(
+                where('creatorId', '==', user.uid),
+                where('teamId', '==', userData.teamId)
+            ));
+        } else {
+            q = query(playbooksRef, where('creatorId', '==', user.uid));
+        }
+
         const unsub = onSnapshot(q, (snapshot) => {
             setAvailablePlaybooks(snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Playbook)));
         });
 
         fetchPath();
         return () => unsub();
-    }, [pathId, user, navigate]);
+    }, [pathId, user, userData, navigate]);
 
     const handleSave = async () => {
         if (!user || !userData || !path.title) return;
@@ -56,7 +77,7 @@ const LearningPathEditorPage: React.FC = () => {
         try {
             const docRef = path.id ? doc(getFirestoreInstance(), 'learningPaths', path.id) : doc(collection(getFirestoreInstance(), 'learningPaths')); // Fix: Use getFirestoreInstance()
             const dataToSave = {
-                creatorId: user.uid,
+                creatorId: path.creatorId || user.uid,
                 teamId: userData.teamId || null,
                 marketCenterId: userData.marketCenterId || null,
                 title: path.title,

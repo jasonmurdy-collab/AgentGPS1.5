@@ -191,9 +191,10 @@ const UserManagementPage: React.FC = () => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
+            const mcId = currentUserData?.role === 'market_center_admin' ? currentUserData.marketCenterId : undefined;
             const [usersData, teamsData, mcData] = await Promise.all([
-                getAllUsers(),
-                getAllTeams(),
+                getAllUsers(mcId),
+                getAllTeams(mcId),
                 getMarketCenters(),
             ]);
             
@@ -208,7 +209,7 @@ const UserManagementPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [getAllUsers, getAllTeams, getMarketCenters]);
+    }, [getAllUsers, getAllTeams, getMarketCenters, currentUserData]);
 
     useEffect(() => {
         fetchData();

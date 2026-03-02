@@ -156,6 +156,7 @@ export const processTeamDoc = (doc: DocumentSnapshot): Team => {
         creatorId: data.creatorId || '',
         memberIds: data.memberIds || [],
         teamCode: data.teamCode || '',
+        marketCenterId: data.marketCenterId || null,
     };
 };
 

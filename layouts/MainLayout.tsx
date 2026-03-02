@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, LogOut, ClipboardList, ListTodo, X, Plus, Target, UserPlus, UserCheck } from 'lucide-react';
+import { Menu, LogOut, ClipboardList, ListTodo, X, Plus, Target, UserPlus, UserCheck, Phone, CalendarCheck, CheckCircle2 } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
 import { logoUrl } from '../assets';
 import { NotificationBell } from '../components/notifications/NotificationBell';
+import { getFirestoreInstance } from '../firebaseConfig';
+import { doc, updateDoc, setDoc, collection, query, where, getDocs, increment } from 'firebase/firestore';
 import {
     agentNavSections,
     teamLeaderNavSections,
@@ -15,12 +17,81 @@ import {
     superAdminNavSections
 } from '../navigation';
 
+const getContrastColor = (hex: string) => {
+    if (!hex) return '#FFFFFF';
+    // Remove hash if present
+    const cleanHex = hex.startsWith('#') ? hex.slice(1) : hex;
+    if (cleanHex.length !== 6) return '#FFFFFF';
+    
+    const r = parseInt(cleanHex.slice(0, 2), 16);
+    const g = parseInt(cleanHex.slice(2, 4), 16);
+    const b = parseInt(cleanHex.slice(4, 6), 16);
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return (yiq >= 128) ? '#000000' : '#FFFFFF';
+};
+
 export const MainLayout: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
-    const { userData, logout } = useAuth();
+    const [quickLogStatus, setQuickLogStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+    const { userData, logout, user, mcBranding } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
+
+    const handleQuickLog = async (type: 'call' | 'appt') => {
+        if (!user || !userData) return;
+        setQuickLogStatus('loading');
+        try {
+            const db = getFirestoreInstance();
+            const dateString = new Date().toISOString().split('T')[0];
+            const q = query(collection(db, 'dailyTrackers'), where('userId', '==', user.uid), where('date', '==', dateString));
+            const snapshot = await getDocs(q);
+            
+            if (snapshot.empty) {
+                // Create new tracker for today if it doesn't exist
+                const newTracker = {
+                    userId: user.uid,
+                    date: dateString,
+                    teamId: userData.teamId || null,
+                    marketCenterId: userData.marketCenterId || null,
+                    coachId: userData.coachId || null,
+                    dials: type === 'call' ? 1 : 0,
+                    doorsKnocked: 0,
+                    knocksAnswered: 0,
+                    pointsActivities: {},
+                    prospectingSessions: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '14:00', endTime: '16:00' }],
+                    prospectingTotals: { 
+                        contacts: 0, 
+                        aptsSet: type === 'appt' ? 1 : 0, 
+                        listingAptsSet: type === 'appt' ? 1 : 0, 
+                        buyerAptsSet: 0, 
+                        lenderAptsSet: 0 
+                    },
+                    notes: '',
+                    schedule: {}
+                };
+                await setDoc(doc(collection(db, 'dailyTrackers')), newTracker);
+            } else {
+                const docRef = doc(db, 'dailyTrackers', snapshot.docs[0].id);
+                if (type === 'call') {
+                    await updateDoc(docRef, { dials: increment(1) });
+                } else {
+                    await updateDoc(docRef, { 
+                        'prospectingTotals.aptsSet': increment(1),
+                        'prospectingTotals.listingAptsSet': increment(1)
+                    });
+                }
+            }
+            setQuickLogStatus('success');
+            setTimeout(() => {
+                setQuickLogStatus('idle');
+                setIsQuickActionOpen(false);
+            }, 1000);
+        } catch (error) {
+            console.error("Quick log failed:", error);
+            setQuickLogStatus('idle');
+        }
+    };
 
     const handleSetIsSidebarOpen = useCallback((isOpen: boolean) => {
         setIsSidebarOpen(isOpen);
@@ -38,6 +109,39 @@ export const MainLayout: React.FC = () => {
         root.classList.toggle('dark', theme === 'dark');
     }, [userData]);
 
+    // Effect for applying market center branding
+    useLayoutEffect(() => {
+        const root = document.documentElement;
+        if (mcBranding) {
+            if (mcBranding.colors.primary) {
+                root.style.setProperty('--color-primary', mcBranding.colors.primary);
+                root.style.setProperty('--color-on-primary', getContrastColor(mcBranding.colors.primary));
+            }
+            if (mcBranding.colors.secondary) {
+                root.style.setProperty('--color-secondary', mcBranding.colors.secondary);
+                root.style.setProperty('--color-on-secondary', getContrastColor(mcBranding.colors.secondary));
+            }
+            if (mcBranding.colors.accent) root.style.setProperty('--color-accent-bg', mcBranding.colors.accent);
+            if (mcBranding.colors.surface) root.style.setProperty('--color-surface', mcBranding.colors.surface);
+            
+            if (mcBranding.typography.headingFont) root.style.setProperty('--font-heading', mcBranding.typography.headingFont);
+            if (mcBranding.typography.bodyFont) root.style.setProperty('--font-body', mcBranding.typography.bodyFont);
+
+            if (mcBranding.style?.borderRadius) root.style.setProperty('--border-radius', mcBranding.style.borderRadius);
+        } else {
+            // Reset to defaults
+            root.style.removeProperty('--color-primary');
+            root.style.removeProperty('--color-on-primary');
+            root.style.removeProperty('--color-secondary');
+            root.style.removeProperty('--color-on-secondary');
+            root.style.removeProperty('--color-accent-bg');
+            root.style.removeProperty('--color-surface');
+            root.style.removeProperty('--font-heading');
+            root.style.removeProperty('--font-body');
+            root.style.removeProperty('--border-radius');
+        }
+    }, [mcBranding]);
+
     // Select nav sections based on role
     const navSections = useMemo(() => {
         if (P.isSuperAdmin(userData)) return superAdminNavSections;
@@ -49,6 +153,8 @@ export const MainLayout: React.FC = () => {
     }, [userData]);
 
     const isLeadership = P.isTeamLeader(userData) || P.isCoach(userData);
+    const isDarkMode = userData?.theme === 'dark';
+    const logoToUse = isDarkMode && mcBranding?.darkLogoUrl ? mcBranding.darkLogoUrl : (mcBranding?.logoUrl || logoUrl);
 
     return (
         <div className="flex h-screen bg-background text-text-primary overflow-hidden">
@@ -62,8 +168,8 @@ export const MainLayout: React.FC = () => {
             <aside className={`bg-surface border-r border-border flex flex-col transition-transform duration-300 fixed inset-y-0 left-0 z-50 w-72 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="flex items-center justify-between p-4 h-20 border-b border-border flex-shrink-0">
                     <div className="flex items-center">
-                        <img src={logoUrl} alt="AgentGPS Logo" className="h-8 w-8 logo-img" />
-                        <span className="font-heading font-bold text-lg ml-2">AgentGPS</span>
+                        <img src={logoToUse} alt="AgentGPS Logo" className="h-8 w-auto logo-img" />
+                        {!logoToUse && <span className="font-heading font-bold text-lg ml-2">AgentGPS</span>}
                     </div>
                     <button onClick={() => handleSetIsSidebarOpen(false)} className="lg:hidden p-2 hover:bg-primary/10 rounded-full">
                         <X size={20} />
@@ -149,9 +255,36 @@ export const MainLayout: React.FC = () => {
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
                         <div className="w-full max-w-sm bg-surface rounded-3xl p-6 shadow-2xl animate-in zoom-in-95">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold">Log New Action</h3>
+                                <h3 className="text-xl font-bold">Quick Actions</h3>
                                 <button onClick={() => setIsQuickActionOpen(false)} className="p-2 hover:bg-primary/5 rounded-full"><X size={24}/></button>
                             </div>
+
+                            {/* Quick Log Section */}
+                            {!isLeadership && (
+                                <div className="mb-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-primary mb-3">Instant Habit Log</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button 
+                                            disabled={quickLogStatus !== 'idle'}
+                                            onClick={() => handleQuickLog('call')}
+                                            className="flex flex-col items-center gap-2 p-3 bg-surface rounded-xl border border-border hover:border-primary transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            {quickLogStatus === 'loading' ? <Spinner className="w-5 h-5"/> : quickLogStatus === 'success' ? <CheckCircle2 className="text-emerald-500" size={20}/> : <Phone className="text-primary" size={20}/>}
+                                            <span className="text-xs font-bold">+1 Call</span>
+                                        </button>
+                                        <button 
+                                            disabled={quickLogStatus !== 'idle'}
+                                            onClick={() => handleQuickLog('appt')}
+                                            className="flex flex-col items-center gap-2 p-3 bg-surface rounded-xl border border-border hover:border-primary transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            {quickLogStatus === 'loading' ? <Spinner className="w-5 h-5"/> : quickLogStatus === 'success' ? <CheckCircle2 className="text-emerald-500" size={20}/> : <CalendarCheck className="text-primary" size={20}/>}
+                                            <span className="text-xs font-bold">+1 Appt</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <p className="text-xs font-bold uppercase tracking-widest text-text-secondary opacity-50 mb-3">Navigate To</p>
                             <div className="grid grid-cols-2 gap-4">
                                 <button onClick={() => { navigate('/client-pipeline'); setIsQuickActionOpen(false); }} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-all active:scale-95">
                                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20"><UserPlus size={24}/></div>

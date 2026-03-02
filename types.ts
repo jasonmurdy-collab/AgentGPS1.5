@@ -31,6 +31,26 @@ export interface Team {
   creatorId: string;
   memberIds: string[];
   teamCode: string;
+  marketCenterId: string | null;
+}
+
+export interface MarketCenterBranding {
+  logoUrl?: string;
+  darkLogoUrl?: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    accent?: string;
+    surface?: string;
+  };
+  typography: {
+    headingFont: string;
+    bodyFont: string;
+  };
+  style?: {
+    borderRadius?: string;
+    navStyle?: 'solid' | 'glass' | 'minimal';
+  };
 }
 
 export interface MarketCenter {
@@ -41,6 +61,7 @@ export interface MarketCenter {
   agentCount: number;
   adminIds: string[];
   calendarEmbedUrl?: string; // Google Calendar Src URL
+  branding?: MarketCenterBranding;
 }
 
 export interface TeamMember {

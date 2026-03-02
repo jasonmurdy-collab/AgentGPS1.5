@@ -1,31 +1,29 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import type { DailyTrackerData, HabitTrackerTemplate, ProspectingTotals, HabitActivitySetting, TeamMember, ProspectingSession } from '../types';
-import { Calendar, Clock, Edit2, Phone, Star, Download, ChevronLeft, ChevronRight, Minus, Plus, Target, FileText, ChevronDown, CheckCircle, Save, ClipboardList } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import type { DailyTrackerData, HabitTrackerTemplate, HabitActivitySetting, ProspectingSession } from '../types';
+import { Calendar, Clock, Star, ChevronLeft, ChevronRight, Minus, Plus, Target, FileText, CheckCircle, Save, ClipboardList } from 'lucide-react';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { doc, getDoc, setDoc, collection, query, where, orderBy, getDocs, addDoc, updateDoc, writeBatch, increment, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
 import { processDailyTrackerDoc } from '../lib/firestoreUtils';
 
 // --- DEFAULT DATA & HELPERS ---
-const defaultHabitActivities: HabitActivitySetting[] = [
-    { id: 'calls', name: 'Calls Made', worth: 1, unit: 'call' },
-    { id: 'doorsKnocked', name: 'Doors Knocked', worth: 1, unit: 'knock' },
-    { id: 'knocksAnswered', name: 'Knocks Answered', worth: 2, unit: 'answer' },
-    { id: 'contacts', name: 'Meaningful Contacts', worth: 2, unit: 'contact' },
-    { id: 'listingAptsSet', name: 'Listing Appointments Set', worth: 10, unit: 'appt' },
-    { id: 'buyerAptsSet', name: 'Buyer Appointments Set', worth: 5, unit: 'appt' },
-    { id: 'lenderAptsSet', name: 'Lender Appointments Set', worth: 3, unit: 'appt' },
-    { id: 'agreements', name: 'Agreements Signed', worth: 20, unit: 'agreement' },
-    { id: 'notes', name: 'Handwritten Notes', worth: 2, unit: 'note' },
-    { id: 'closings', name: 'Closings', worth: 50, unit: 'closing' },
-    { id: 'open_house_hours', name: 'Open House Hours', worth: 10, unit: 'hour' },
-    { id: 'social_posts', name: 'Social Media Posts', worth: 2, unit: 'post' },
-    { id: 'video_content', name: 'Video Content Created', worth: 5, unit: 'video' },
-    { id: 'new_leads', name: 'New Leads Added', worth: 1, unit: 'lead' },
+const defaultHabitActivities: (HabitActivitySetting & { category?: string })[] = [
+    { id: 'calls', name: 'Calls Made', worth: 1, unit: 'call', category: 'Lead Generation' },
+    { id: 'doorsKnocked', name: 'Doors Knocked', worth: 1, unit: 'knock', category: 'Lead Generation' },
+    { id: 'knocksAnswered', name: 'Knocks Answered', worth: 2, unit: 'answer', category: 'Lead Generation' },
+    { id: 'contacts', name: 'Meaningful Contacts', worth: 2, unit: 'contact', category: 'Lead Generation' },
+    { id: 'listingAptsSet', name: 'Listing Appointments Set', worth: 10, unit: 'appt', category: 'Appointments' },
+    { id: 'buyerAptsSet', name: 'Buyer Appointments Set', worth: 5, unit: 'appt', category: 'Appointments' },
+    { id: 'lenderAptsSet', name: 'Lender Appointments Set', worth: 3, unit: 'appt', category: 'Appointments' },
+    { id: 'agreements', name: 'Agreements Signed', worth: 20, unit: 'agreement', category: 'Conversions' },
+    { id: 'notes', name: 'Handwritten Notes', worth: 2, unit: 'note', category: 'Marketing' },
+    { id: 'closings', name: 'Closings', worth: 50, unit: 'closing', category: 'Conversions' },
+    { id: 'open_house_hours', name: 'Open House Hours', worth: 10, unit: 'hour', category: 'Lead Generation' },
+    { id: 'social_posts', name: 'Social Media Posts', worth: 2, unit: 'post', category: 'Marketing' },
+    { id: 'video_content', name: 'Video Content Created', worth: 5, unit: 'video', category: 'Marketing' },
+    { id: 'new_leads', name: 'New Leads Added', worth: 1, unit: 'lead', category: 'Lead Generation' },
 ];
 
 const getInitialTrackerData = (userId: string, date: Date, teamId?: string | null, marketCenterId?: string | null, coachId?: string | null): Omit<DailyTrackerData, 'id'> => {
@@ -63,24 +61,6 @@ const calculateTotalPoints = (data: DailyTrackerData | null, settings: HabitTrac
         const count = getMetricValue(data, activity.id);
         return total + (count * activity.worth);
     }, 0);
-};
-
-const PrintableTracker: React.FC<{ data: DailyTrackerData; settings: HabitTrackerTemplate; userName: string; }> = ({ data, settings, userName }) => {
-    const totalPoints = calculateTotalPoints(data, settings);
-    const date = new Date(data.date);
-    date.setUTCHours(12);
-    const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
-    const filledSchedule = Object.entries(data.schedule).filter(([, task]) => typeof task === 'string' && task.trim() !== '');
-
-    return (
-        <div id="pdf-export-content" className="p-10 bg-white text-gray-800 w-[827px] font-sans">
-             <div className="text-center mb-6 border-b-2 border-primary pb-4">
-                <h1 className="text-3xl font-bold text-primary">Daily Accountability Report</h1>
-                <p className="text-lg text-gray-600 mt-1"><strong>{userName}</strong> - {formattedDate}</p>
-            </div>
-            {/* ... rest of printable content */}
-        </div>
-    );
 };
 
 // --- Reusable Components ---
@@ -135,8 +115,6 @@ const ProspectingSessionSection: React.FC<{ sessions: [ProspectingSession, Prosp
 ));
 
 const ScheduleSection: React.FC<{ schedule: { [time: string]: string }; onUpdate: (path: string, value: any) => void; }> = React.memo(({ schedule, onUpdate }) => {
-    const [isOpen, setIsOpen] = useState(false);
-
     const formatTime = (time24: string) => {
         if (!time24) return '';
         const [hour, minute] = time24.split(':');
@@ -146,22 +124,56 @@ const ScheduleSection: React.FC<{ schedule: { [time: string]: string }; onUpdate
         return `${displayHour}:${minute} ${ampm}`;
     };
 
+    const activeBlocks = Object.entries(schedule)
+        .filter(([, task]) => task && task.trim() !== '')
+        .sort(([a], [b]) => a.localeCompare(b));
+
+    const addTimeBlock = () => {
+        const time = prompt("Enter time (e.g. 09:00 or 14:30):");
+        if (time && /^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
+            onUpdate(`schedule.${time}`, ' ');
+        } else if (time) {
+            alert("Please enter time in HH:MM format");
+        }
+    };
+
     return (
         <Card className="p-0 overflow-hidden">
-            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-4 text-left hover:bg-primary/5 transition-colors">
-                <h2 className="text-2xl font-bold flex items-center gap-3"><Calendar/> Today's Schedule</h2>
-                <ChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isOpen ? 'max-h-[2000px]' : 'max-h-0'}`}>
-                <div className="p-4 border-t border-border">
-                    <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                        {schedule && Object.keys(schedule).sort().map(time => (
-                            <div key={time} className="flex items-center gap-2">
-                                <span className="w-20 text-sm font-semibold text-text-secondary">{formatTime(time)}</span>
-                                <input type="text" value={schedule[time]} onChange={e => onUpdate(`schedule.${time}`, e.target.value)} className="w-full bg-input border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"/>
+            <div className="w-full flex justify-between items-center p-4 text-left">
+                <h2 className="text-2xl font-bold flex items-center gap-3"><Calendar/> Today's Agenda</h2>
+                <button 
+                    onClick={addTimeBlock}
+                    className="flex items-center gap-1 text-sm bg-primary/10 text-primary px-3 py-1 rounded-full hover:bg-primary/20 transition-colors"
+                >
+                    <Plus size={14} /> Add Block
+                </button>
+            </div>
+            <div className="p-4 border-t border-border">
+                <div className="space-y-3">
+                    {activeBlocks.length === 0 ? (
+                        <p className="text-sm text-text-secondary italic text-center py-4">No agenda items yet. Click "Add Block" to start planning your day.</p>
+                    ) : (
+                        activeBlocks.map(([time, task]) => (
+                            <div key={time} className="flex items-start gap-3 group">
+                                <div className="w-20 pt-2 text-xs font-bold text-text-secondary uppercase tracking-wider">{formatTime(time)}</div>
+                                <div className="flex-1">
+                                    <input 
+                                        type="text" 
+                                        value={task} 
+                                        onChange={e => onUpdate(`schedule.${time}`, e.target.value)} 
+                                        className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                                        placeholder="What are you doing at this time?"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => onUpdate(`schedule.${time}`, '')}
+                                    className="pt-2 text-text-secondary opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                                >
+                                    <Minus size={14} />
+                                </button>
                             </div>
-                        ))}
-                    </div>
+                        ))
+                    )}
                 </div>
             </div>
         </Card>
@@ -253,9 +265,9 @@ const DailyHabitsTrackerPage: React.FC = () => {
                 setDocId(null);
                 setTrackerData(getInitialTrackerData(user.uid, currentDate, userData?.teamId, userData?.marketCenterId, userData?.coachId) as DailyTrackerData);
             } else {
-                const doc = snapshot.docs[0];
-                setDocId(doc.id);
-                setTrackerData(processDailyTrackerDoc(doc));
+                const docSnap = snapshot.docs[0];
+                setDocId(docSnap.id);
+                setTrackerData(processDailyTrackerDoc(docSnap));
             }
             setLoading(false);
         };
@@ -278,9 +290,26 @@ const DailyHabitsTrackerPage: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col">
-            <header className="p-4 sm:p-6 lg:p-8">
-                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-3"><ClipboardList/> Daily Habits Tracker</h1>
-                 <p className="text-lg text-text-secondary mt-1">Track your daily lead generation and business building activities.</p>
+            <header className="p-4 sm:p-6 lg:p-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                 <div>
+                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-3"><ClipboardList/> Daily Habits Tracker</h1>
+                    <p className="text-lg text-text-secondary mt-1">Track your daily lead generation and business building activities.</p>
+                 </div>
+                 <div className="flex items-center gap-3 bg-surface p-2 rounded-xl border border-border">
+                    {saveStatus === 'saving' ? (
+                        <div className="flex items-center gap-2 text-primary text-sm font-medium">
+                            <Spinner className="w-4 h-4" /> Saving...
+                        </div>
+                    ) : saveStatus === 'saved' ? (
+                        <div className="flex items-center gap-2 text-emerald-500 text-sm font-medium">
+                            <CheckCircle size={16} /> All changes saved
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2 text-text-secondary text-sm font-medium">
+                            <Save size={16} /> Auto-save active
+                        </div>
+                    )}
+                 </div>
             </header>
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-6">
                 <div className="flex justify-between items-center flex-wrap gap-4">
@@ -291,40 +320,71 @@ const DailyHabitsTrackerPage: React.FC = () => {
                     </div>
                 </div>
 
-                <Card>
-                    <h2 className="text-xl font-bold mb-4">At a Glance for {currentDate.toLocaleDateString('en-CA')}</h2>
+                <Card className="relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-border">
+                        <div 
+                            className="h-full bg-primary transition-all duration-1000 ease-out" 
+                            style={{ width: `${Math.min(100, (totalPoints / 100) * 100)}%` }}
+                        />
+                    </div>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h2 className="text-xl font-bold">At a Glance for {currentDate.toLocaleDateString('en-CA')}</h2>
+                        <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-full">
+                            <Star className="text-primary" size={18} />
+                            <span className="font-bold text-primary">{totalPoints} / 100 <span className="text-xs font-normal opacity-70">Daily Goal</span></span>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                        <div className="bg-background/50 p-3 rounded-lg"><p className="text-sm text-text-secondary uppercase">Total Points</p><p className="text-4xl font-black text-primary">{totalPoints}</p></div>
-                        <div className="bg-background/50 p-3 rounded-lg"><p className="text-sm text-text-secondary uppercase">Calls Made</p><p className="text-4xl font-bold text-text-primary">{trackerData.dials || 0}</p></div>
-                        <div className="bg-background/50 p-3 rounded-lg"><p className="text-sm text-text-secondary uppercase">Appointments Set</p><p className="text-4xl font-bold text-text-primary">{trackerData.prospectingTotals.aptsSet || 0}</p></div>
+                        <div className="bg-background/50 p-4 rounded-xl border border-border/50">
+                            <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-1">Total Points</p>
+                            <p className="text-4xl font-black text-primary">{totalPoints}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-xl border border-border/50">
+                            <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-1">Calls Made</p>
+                            <p className="text-4xl font-bold text-text-primary">{trackerData.dials || 0}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-xl border border-border/50">
+                            <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-1">Appointments Set</p>
+                            <p className="text-4xl font-bold text-text-primary">{trackerData.prospectingTotals.aptsSet || 0}</p>
+                        </div>
                     </div>
                 </Card>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="space-y-6">
                          <Card>
-                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><Target/> Daily Metrics</h2>
-                            <div className="grid grid-cols-1 gap-4">
-                                {habitSettings.activities.map(activity => (
-                                    <MetricStepper 
-                                        key={activity.id}
-                                        label={activity.name} 
-                                        value={getMetricValue(trackerData, activity.id)} 
-                                        onUpdate={(val) => {
-                                            const path = ({
-                                                'calls': 'dials',
-                                                'doorsKnocked': 'doorsKnocked',
-                                                'knocksAnswered': 'knocksAnswered',
-                                                'contacts': 'prospectingTotals.contacts',
-                                                'listingAptsSet': 'prospectingTotals.listingAptsSet',
-                                                'buyerAptsSet': 'prospectingTotals.buyerAptsSet',
-                                                'lenderAptsSet': 'prospectingTotals.lenderAptsSet',
-                                            } as Record<string, string>)[activity.id] || `pointsActivities.${activity.id}`;
-                                            handleUpdate(path, val);
-                                        }}
-                                        unit={activity.unit}
-                                        points={activity.worth}
-                                    />
+                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><Target/> Daily Metrics</h2>
+                            <div className="space-y-8">
+                                {Array.from(new Set(habitSettings.activities.map(a => (a as any).category || 'Other'))).map(category => (
+                                    <div key={category}>
+                                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <span className="w-2 h-2 bg-primary rounded-full"></span>
+                                            {category}
+                                        </h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {habitSettings.activities.filter(a => ((a as any).category || 'Other') === category).map(activity => (
+                                                <MetricStepper 
+                                                    key={activity.id}
+                                                    label={activity.name} 
+                                                    value={getMetricValue(trackerData, activity.id)} 
+                                                    onUpdate={(val) => {
+                                                        const path = ({
+                                                            'calls': 'dials',
+                                                            'doorsKnocked': 'doorsKnocked',
+                                                            'knocksAnswered': 'knocksAnswered',
+                                                            'contacts': 'prospectingTotals.contacts',
+                                                            'listingAptsSet': 'prospectingTotals.listingAptsSet',
+                                                            'buyerAptsSet': 'prospectingTotals.buyerAptsSet',
+                                                            'lenderAptsSet': 'prospectingTotals.lenderAptsSet',
+                                                        } as Record<string, string>)[activity.id] || `pointsActivities.${activity.id}`;
+                                                        handleUpdate(path, val);
+                                                    }}
+                                                    unit={activity.unit}
+                                                    points={activity.worth}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </Card>

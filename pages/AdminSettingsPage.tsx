@@ -24,15 +24,26 @@ import {
     Save, 
     Zap, 
     KeyRound, 
-    User
+    User,
+    Palette
 } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
-import type { MarketCenter, TeamMember, Announcement, LiveSession } from '../types';
+import type { MarketCenter, TeamMember, Announcement, LiveSession, MarketCenterBranding } from '../types';
 import { Spinner } from '../components/ui/Spinner';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, getDocs, addDoc, serverTimestamp, orderBy, query, deleteDoc, doc, where, updateDoc, getDoc, limit } from 'firebase/firestore';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import { ScheduleSessionModal } from '../components/launchpad/ScheduleSessionModal';
+import { CURATED_FONTS, CURATED_PALETTES, CURATED_CORNER_STYLES, CURATED_NAV_STYLES } from '../constants/branding';
+
+const getContrastColor = (hex: string) => {
+    if (!hex) return 'white';
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return (yiq >= 128) ? 'black' : 'white';
+};
 
 const LaunchpadIntegrations: React.FC = () => {
     const [integrations, setIntegrations] = useState<{ google?: boolean; zoom?: boolean }>({
@@ -533,6 +544,13 @@ const MarketCenterLeadershipSettings: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [calendarUrl, setCalendarUrl] = useState('');
+    const [branding, setBranding] = useState<MarketCenterBranding>({
+        colors: { primary: '#B40101', secondary: '#333333', accent: '#F5F5F5', surface: '#FFFFFF' },
+        typography: { headingFont: 'Inter', bodyFont: 'Inter' },
+        logoUrl: '',
+        darkLogoUrl: '',
+        style: { borderRadius: '12px', navStyle: 'solid' }
+    });
     const [feedback, setFeedback] = useState('');
     const [showHelp, setShowHelp] = useState(false);
 
@@ -546,6 +564,9 @@ const MarketCenterLeadershipSettings: React.FC = () => {
                 const data = mcDoc.data() as MarketCenter;
                 setMcData({ id: mcDoc.id, ...data });
                 setCalendarUrl(data.calendarEmbedUrl || '');
+                if (data.branding) {
+                    setBranding(data.branding);
+                }
             }
             setLoading(false);
         };
@@ -572,9 +593,10 @@ const MarketCenterLeadershipSettings: React.FC = () => {
             const db = getFirestoreInstance();
             if (!db) return;
             await updateDoc(doc(db, 'marketCenters', userData.marketCenterId), {
-                calendarEmbedUrl: calendarUrl
+                calendarEmbedUrl: calendarUrl,
+                branding: branding
             });
-            setFeedback('Calendar URL updated!');
+            setFeedback('Settings updated!');
             setTimeout(() => setFeedback(''), 3000);
         } catch (error) {
             console.error(error);
@@ -619,31 +641,177 @@ const MarketCenterLeadershipSettings: React.FC = () => {
                 </div>
             )}
 
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Google Calendar Embed URL or Code</label>
-                    <textarea 
-                        value={calendarUrl} 
-                        onChange={e => handleUrlChange(e.target.value)} 
-                        className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary min-h-[80px] font-mono text-xs"
-                        placeholder="Paste <iframe ...> code or the src URL here..."
-                    />
-                    <div className="flex items-start gap-2 mt-2">
-                        <Info size={14} className="text-text-secondary mt-0.5" />
-                        <p className="text-[11px] text-text-secondary">
-                            This calendar will be visible to every agent in your Market Center. 
-                            Ensure the calendar's <strong>Public Sharing</strong> is turned on in Google, or agents will only see a blank screen.
-                        </p>
+            <div className="space-y-8">
+                {/* Branding Section */}
+                <div className="p-6 bg-surface border border-border rounded-2xl">
+                    <h3 className="text-lg font-bold flex items-center gap-2 mb-4"><Palette size={20} className="text-primary"/> Branding & White Labeling</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-bold text-text-secondary mb-2 uppercase tracking-widest">Market Center Logo URL</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-text-secondary mb-1 uppercase opacity-50">Light Mode Logo</p>
+                                        <input 
+                                            type="text"
+                                            value={branding.logoUrl || ''}
+                                            onChange={e => setBranding(prev => ({ ...prev, logoUrl: e.target.value }))}
+                                            className="w-full bg-input border border-border rounded-xl px-4 py-2.5 text-sm"
+                                            placeholder="https://example.com/logo.png"
+                                        />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-text-secondary mb-1 uppercase opacity-50">Dark Mode Logo (Optional)</p>
+                                        <input 
+                                            type="text"
+                                            value={branding.darkLogoUrl || ''}
+                                            onChange={e => setBranding(prev => ({ ...prev, darkLogoUrl: e.target.value }))}
+                                            className="w-full bg-input border border-border rounded-xl px-4 py-2.5 text-sm"
+                                            placeholder="https://example.com/logo-dark.png"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-text-secondary mt-2">Recommended: Transparent PNG, approx. 200x50px.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-text-secondary mb-3 uppercase tracking-widest">Corner Style</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {CURATED_CORNER_STYLES.map(style => (
+                                        <button
+                                            key={style.name}
+                                            onClick={() => setBranding(prev => ({ ...prev, style: { ...prev.style, borderRadius: style.value } }))}
+                                            className={`px-4 py-2 rounded-lg border text-xs font-bold transition-all ${branding.style?.borderRadius === style.value ? 'bg-primary text-on-accent border-primary' : 'bg-surface border-border hover:border-primary/50'}`}
+                                        >
+                                            {style.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-text-secondary mb-3 uppercase tracking-widest">Color Palette</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {CURATED_PALETTES.map(palette => (
+                                        <button
+                                            key={palette.name}
+                                            onClick={() => setBranding(prev => ({ ...prev, colors: palette.colors }))}
+                                            className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${JSON.stringify(branding.colors) === JSON.stringify(palette.colors) ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}
+                                        >
+                                            <div className="flex -space-x-2">
+                                                <div className="w-6 h-6 rounded-full border border-white" style={{ backgroundColor: palette.colors.primary }}></div>
+                                                <div className="w-6 h-6 rounded-full border border-white" style={{ backgroundColor: palette.colors.secondary }}></div>
+                                            </div>
+                                            <span className="text-xs font-bold">{palette.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-text-secondary mb-3 uppercase tracking-widest">Typography</label>
+                                <div className="space-y-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-text-secondary mb-2 uppercase opacity-50">Heading Font</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {[...CURATED_FONTS.sans, ...CURATED_FONTS.serif].map(font => (
+                                                <button
+                                                    key={font.name}
+                                                    onClick={() => setBranding(prev => ({ ...prev, typography: { ...prev.typography, headingFont: font.value } }))}
+                                                    className={`px-3 py-1.5 rounded-lg border text-xs transition-all ${branding.typography.headingFont === font.value ? 'bg-primary text-on-accent border-primary' : 'bg-surface border-border hover:border-primary/50'}`}
+                                                    style={{ fontFamily: font.value }}
+                                                >
+                                                    {font.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-text-secondary mb-2 uppercase opacity-50">Body Font</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {CURATED_FONTS.sans.map(font => (
+                                                <button
+                                                    key={font.name}
+                                                    onClick={() => setBranding(prev => ({ ...prev, typography: { ...prev.typography, bodyFont: font.value } }))}
+                                                    className={`px-3 py-1.5 rounded-lg border text-xs transition-all ${branding.typography.bodyFont === font.value ? 'bg-primary text-on-accent border-primary' : 'bg-surface border-border hover:border-primary/50'}`}
+                                                    style={{ fontFamily: font.value }}
+                                                >
+                                                    {font.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Preview Area */}
+                        <div className="bg-background rounded-2xl p-6 border border-border flex flex-col items-center justify-center text-center space-y-4" style={{ borderRadius: branding.style?.borderRadius }}>
+                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Live Preview</p>
+                            <div className="w-full max-w-[200px] h-12 bg-surface border border-border flex items-center justify-center mb-4 overflow-hidden" style={{ borderRadius: branding.style?.borderRadius }}>
+                                {branding.logoUrl ? (
+                                    <img src={branding.logoUrl} alt="Preview" className="max-h-8 w-auto" />
+                                ) : (
+                                    <span className="text-xs font-bold opacity-20 italic">No Logo Set</span>
+                                )}
+                            </div>
+                            <h4 className="text-2xl font-bold" style={{ color: branding.colors.primary, fontFamily: branding.typography.headingFont }}>Sample Heading</h4>
+                            <p className="text-sm text-text-secondary max-w-[250px]" style={{ fontFamily: branding.typography.bodyFont }}>
+                                This is how your market center's typography and primary color will look in the application.
+                            </p>
+                            <div className="flex gap-2">
+                                <button 
+                                    className="px-6 py-2 font-bold text-sm shadow-lg transition-all"
+                                    style={{ 
+                                        backgroundColor: branding.colors.primary, 
+                                        color: getContrastColor(branding.colors.primary),
+                                        borderRadius: branding.style?.borderRadius
+                                    }}
+                                >
+                                    Primary Action
+                                </button>
+                                <button 
+                                    className="px-6 py-2 font-bold text-sm border border-border transition-all"
+                                    style={{ 
+                                        borderRadius: branding.style?.borderRadius
+                                    }}
+                                >
+                                    Secondary
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                {/* Calendar Section */}
+                <div className="p-6 bg-surface border border-border rounded-2xl">
+                    <h3 className="text-lg font-bold flex items-center gap-2 mb-4"><CalendarIcon size={20} className="text-primary"/> Shared Calendar</h3>
+                    <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-1">Google Calendar Embed URL or Code</label>
+                        <textarea 
+                            value={calendarUrl} 
+                            onChange={e => handleUrlChange(e.target.value)} 
+                            className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary min-h-[80px] font-mono text-xs"
+                            placeholder="Paste <iframe ...> code or the src URL here..."
+                        />
+                        <div className="flex items-start gap-2 mt-2">
+                            <Info size={14} className="text-text-secondary mt-0.5" />
+                            <p className="text-[11px] text-text-secondary">
+                                This calendar will be visible to every agent in your Market Center. 
+                                Ensure the calendar's <strong>Public Sharing</strong> is turned on in Google.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="flex items-center justify-end gap-4">
                     {feedback && <span className="text-sm text-success flex items-center gap-1"><CheckCircle size={14}/> {feedback}</span>}
                     <button 
                         onClick={handleSave} 
                         disabled={saving}
-                        className="bg-primary text-on-accent px-4 py-2 rounded-lg font-semibold min-w-[120px]"
+                        className="bg-primary text-on-accent px-8 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 min-w-[160px]"
                     >
-                        {saving ? <Spinner className="mx-auto" /> : 'Save Calendar Link'}
+                        {saving ? <Spinner className="mx-auto" /> : 'Save All Settings'}
                     </button>
                 </div>
             </div>

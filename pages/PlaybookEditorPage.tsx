@@ -388,7 +388,12 @@ const PlaybookEditorPage: React.FC = () => {
             } else {
                 const docRef = doc(getFirestoreInstance(), 'playbooks', playbookId);
                 const docSnap = await getDoc(docRef);
-                if (docSnap.exists() && docSnap.data().creatorId === user.uid) {
+                const data = docSnap.data();
+                const isCreator = data?.creatorId === user.uid;
+                const isMcStaff = data?.marketCenterId && data.marketCenterId === userData?.marketCenterId && P.isCoach(userData);
+                const isTeamStaff = data?.teamId && data.teamId === userData?.teamId && P.isTeamLeader(userData);
+                
+                if (docSnap.exists() && (isCreator || isMcStaff || isTeamStaff || P.isSuperAdmin(userData))) {
                     setPlaybook(processPlaybookDoc(docSnap));
                 } else {
                     setError('Playbook not found or you do not have permission to edit it.');

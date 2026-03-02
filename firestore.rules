@@ -21,30 +21,26 @@ service cloud.firestore {
       return isSuperAdmin() || (user.role == 'market_center_admin' && user.marketCenterId == mcId);
     }
 
-    function isCoachOf(agentId) {
-      let agent = get(/databases/$(database)/documents/users/$(agentId)).data;
-      return request.auth.uid == agent.coachId;
-    }
-
-    function isTeamLeaderOf(agentId) {
+    function canManageAgent(agentData, agentId) {
       let user = getUserData();
-      let agent = get(/databases/$(database)/documents/users/$(agentId)).data;
-      return user.role == 'team_leader' && user.teamId != null && user.teamId == agent.teamId;
+      return isSuperAdmin() || 
+             (user.role == 'market_center_admin' && user.marketCenterId == agentData.marketCenterId) || 
+             (user.role == 'productivity_coach' && user.marketCenterId == agentData.marketCenterId) ||
+             (request.auth.uid == agentData.coachId) ||
+             (user.role == 'team_leader' && user.teamId != null && user.teamId == agentData.teamId);
     }
 
-    function canManageAgent(agentId) {
-      let agent = get(/databases/$(database)/documents/users/$(agentId)).data;
+    function canManageMCResources(mcId) {
+      let user = getUserData();
       return isSuperAdmin() || 
-             isMcAdmin(agent.marketCenterId) || 
-             isCoachOf(agentId) || 
-             isTeamLeaderOf(agentId);
+             (isSignedIn() && user.marketCenterId == mcId && (user.role == 'market_center_admin' || user.role == 'productivity_coach'));
     }
 
     // --- Collection Rules ---
 
     // Users
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || canManageAgent(userId));
+      allow read: if isSignedIn() && (request.auth.uid == userId || canManageAgent(resource.data, userId));
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == userId || 
@@ -56,32 +52,68 @@ service cloud.firestore {
 
     // Goals
     match /goals/{goalId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || canManageAgent(resource.data.userId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.userId || canManageAgent(request.resource.data.userId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        isMcAdmin(resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.userId || 
+        isMcAdmin(request.resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId)
+      );
     }
 
     // Transactions
     match /transactions/{txId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || canManageAgent(resource.data.userId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.userId || canManageAgent(request.resource.data.userId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        isMcAdmin(resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.userId || 
+        isMcAdmin(request.resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId)
+      );
     }
 
     // Daily Trackers (Habits)
     match /dailyTrackers/{trackerId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || canManageAgent(resource.data.userId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.userId || canManageAgent(request.resource.data.userId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        isMcAdmin(resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.userId || 
+        isMcAdmin(request.resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId)
+      );
     }
 
     // Performance Logs
     match /performanceLogs/{logId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.agentId || canManageAgent(resource.data.agentId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.coachId || canManageAgent(request.resource.data.agentId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.agentId || 
+        isMcAdmin(resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.agentId)).data, resource.data.agentId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.coachId || 
+        isMcAdmin(request.resource.data.marketCenterId) ||
+        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.agentId)).data, resource.data.agentId)
+      );
     }
 
     // Teams
     match /teams/{teamId} {
-      allow read: if isSignedIn() && (request.auth.uid in resource.data.memberIds || isMcAdmin(getUserData().marketCenterId));
-      allow write: if isSignedIn() && (request.auth.uid == resource.data.creatorId || isMcAdmin(getUserData().marketCenterId));
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.memberIds || 
+        isMcAdmin(resource.data.marketCenterId) ||
+        (getUserData().role == 'productivity_coach' && getUserData().marketCenterId == resource.data.marketCenterId)
+      );
+      allow write: if isSignedIn() && (request.auth.uid == resource.data.creatorId || isMcAdmin(resource.data.marketCenterId));
     }
 
     // Market Centers
@@ -98,8 +130,8 @@ service cloud.firestore {
 
     // Client Leads
     match /clientLeads/{leadId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isTeamLeaderOf(resource.data.ownerId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.ownerId || isTeamLeaderOf(request.resource.data.ownerId));
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.ownerId || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.ownerId)).data, resource.data.ownerId));
+      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.ownerId || canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.ownerId)).data, request.resource.data.ownerId));
     }
     
     // Todos
@@ -116,18 +148,60 @@ service cloud.firestore {
     // Playbooks and Learning Paths
     match /playbooks/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isMcAdmin(resource.data.marketCenterId) || isSuperAdmin());
+      allow write: if isSignedIn() && (canManageMCResources(request.resource.data.marketCenterId) || canManageMCResources(resource.data.marketCenterId) || isSuperAdmin());
     }
     
     match /learningPaths/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isMcAdmin(resource.data.marketCenterId) || isSuperAdmin());
+      allow write: if isSignedIn() && (canManageMCResources(request.resource.data.marketCenterId) || canManageMCResources(resource.data.marketCenterId) || isSuperAdmin());
     }
 
     // User Submissions (LMS)
     match /userSubmissions/{subId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || canManageAgent(resource.data.userId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.userId || canManageAgent(request.resource.data.userId));
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId));
+      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.userId || canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId));
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow write: if isSignedIn();
+    }
+
+    // Commission Profiles
+    match /commissionProfiles/{profileId} {
+      allow read: if isSignedIn() && (request.auth.uid == profileId || isMcAdmin(resource.data.marketCenterId) || canManageAgent(get(/databases/$(database)/documents/users/$(profileId)).data, profileId));
+      allow write: if isSignedIn() && (request.auth.uid == profileId || isMcAdmin(resource.data.marketCenterId));
+    }
+
+    // Budget Models
+    match /budgetModels/{modelId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isMcAdmin(resource.data.marketCenterId) || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId));
+      allow write: if isSignedIn() && (request.auth.uid == resource.data.userId || isMcAdmin(resource.data.marketCenterId) || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId));
+    }
+
+    // Live Sessions
+    match /{path=**}/liveSessions/{sessionId} {
+      allow read: if isSignedIn() && (resource.data.marketCenterId == getUserData().marketCenterId || isSuperAdmin());
+      allow write: if isSignedIn() && (resource.data.marketCenterId == getUserData().marketCenterId || isSuperAdmin());
+    }
+
+    // Business GPS
+    match /businessGps/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || canManageAgent(get(/databases/$(database)/documents/users/$(userId)).data, userId));
+      allow write: if isSignedIn() && (request.auth.uid == userId || isMcAdmin(get(/databases/$(database)/documents/users/$(userId)).data.marketCenterId));
+    }
+
+    // Habit Tracker Templates
+    match /habitTrackerTemplates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin() || (isSignedIn() && isMcAdmin(request.resource.data.marketCenterId));
+    }
+
+    // Organizational Blueprints
+    match /orgBlueprints/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || canManageAgent(get(/databases/$(database)/documents/users/$(userId)).data, userId));
+      allow write: if isSignedIn() && (request.auth.uid == userId || isMcAdmin(get(/databases/$(database)/documents/users/$(userId)).data.marketCenterId));
     }
   }
 }

@@ -1,1 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-body, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --font-heading: var(--font-heading, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-primary: var(--color-primary, #B40101);
+  --color-secondary: var(--color-secondary, #333333);
+  --color-accent-bg: var(--color-accent-bg, #F5F5F5);
+  --color-surface: var(--color-surface, #FFFFFF);
+
+  --radius-custom: var(--border-radius, 12px);
+
+  /* Map existing semantic colors to use these variables if needed */
+}
+
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+  body {
+    font-family: var(--font-sans);
+  }
+  * {
+    border-radius: var(--radius-custom);
+  }
+  /* Exclude some elements from global border radius if needed */
+  input, button, .card, .bg-surface, .rounded-xl, .rounded-2xl, .rounded-lg {
+    border-radius: var(--radius-custom) !important;
+  }
+}

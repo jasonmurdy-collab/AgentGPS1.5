@@ -279,7 +279,7 @@ const AgentAssignmentPage: React.FC = () => {
         try {
             const [usersInMc, allTeamsData, allMcData] = await Promise.all([
                 getUsersForMarketCenter(currentMarketCenterId),
-                getAllTeams(),
+                getAllTeams(currentMarketCenterId),
                 getMarketCenters(), // Fetch all market centers
             ]);
 

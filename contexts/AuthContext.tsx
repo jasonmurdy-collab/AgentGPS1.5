@@ -33,7 +33,7 @@ import {
     deleteDoc
 } from 'firebase/firestore';
 import { processDailyTrackerDoc, processTransactionDoc, processCommissionProfileDoc, processUserDoc, processTeamDoc, processPerformanceLogDoc, processPlaybookDoc, processClientLeadDoc, processClientLeadActivityDoc, processTodoItemDoc } from '../lib/firestoreUtils';
-import type { Team, TeamMember, NewAgentResources, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, MarketCenter, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem } from '../types';
+import type { Team, TeamMember, NewAgentResources, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, MarketCenter, MarketCenterBranding, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem } from '../types';
 
 export const P = {
   isSuperAdmin: (user: TeamMember | null): boolean => !!user?.isSuperAdmin,
@@ -53,6 +53,7 @@ export const P = {
 interface AuthContextType {
   user: FirebaseUser | null;
   userData: TeamMember | null;
+  mcBranding: MarketCenterBranding | null;
   loading: boolean;
   managedAgents: TeamMember[];
   loadingAgents: boolean;
@@ -68,7 +69,7 @@ interface AuthContextType {
   updateTheme: (theme: string) => Promise<void>;
   getTeamById: (teamId: string) => Promise<Team | null>;
   getUsersByIds: (userIds: string[]) => Promise<TeamMember[]>;
-  getAllUsers: () => Promise<TeamMember[]>;
+  getAllUsers: (marketCenterId?: string) => Promise<TeamMember[]>;
   getUsersForMarketCenter: (marketCenterId: string) => Promise<TeamMember[]>;
   leaveTeam: () => Promise<{ success: boolean; message: string; }>;
   removeAgentFromTeam: (agentId: string) => Promise<{ success: boolean; message: string; }>;
@@ -108,7 +109,7 @@ interface AuthContextType {
   updateUserRole: (userId: string, role: TeamMember['role']) => Promise<void>;
   updateUserMarketCenterForAdmin: (userId: string, marketCenterId: string | null) => Promise<void>;
   updateUserRoleAndMarketCenterAffiliation: (userId: string, newRole: TeamMember['role'], newMarketCenterId: string | null) => Promise<void>;
-  getAllTeams: () => Promise<Team[]>;
+  getAllTeams: (marketCenterId?: string) => Promise<Team[]>;
   getAllTransactionsForAdmin: () => Promise<Transaction[]>;
   updatePlaybookProgress: (playbookId: string, completedLessonIds: string[]) => Promise<void>;
   updateOnboardingChecklistProgress: (completedItemIds: string[]) => Promise<void>;
@@ -149,6 +150,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<FirebaseUser | null>(null);
     const [userData, setUserData] = useState<TeamMember | null>(null);
+    const [mcBranding, setMcBranding] = useState<MarketCenterBranding | null>(null);
     const [loading, setLoading] = useState(true);
     const [managedAgents, setManagedAgents] = useState<TeamMember[]>([]);
     const [loadingAgents, setLoadingAgents] = useState(true);
@@ -180,6 +182,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return () => { if (unsubscribe) unsubscribe(); };
     }, [user]);
+
+    useEffect(() => {
+        const db = getFirestoreInstance();
+        if (!userData?.marketCenterId || !db) {
+            setMcBranding(null);
+            return;
+        }
+
+        const unsubscribe = onSnapshot(doc(db, 'marketCenters', userData.marketCenterId), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setMcBranding(data.branding || null);
+            } else {
+                setMcBranding(null);
+            }
+        });
+
+        return () => unsubscribe();
+    }, [userData?.marketCenterId]);
 
     useEffect(() => {
         const db = getFirestoreInstance();
@@ -282,7 +303,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const signInWithEmail = useCallback(async (email: string, password: string) => {
         const auth = getAuthInstance();
         if (!auth) throw new Error("Firebase not initialized");
-        await signInWithEmailAndPassword(auth, email, password);
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (err: any) {
+            console.error("Detailed Login Error:", {
+                code: err.code,
+                message: err.message,
+                stack: err.stack,
+                customData: err.customData
+            });
+            throw err;
+        }
     }, []);
 
     const logout = useCallback(async () => {
@@ -316,16 +347,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const createTeam = useCallback(async (teamName: string) => {
         const db = getFirestoreInstance();
-        if (!user || !db) return;
+        if (!user || !db || !userData) return;
         const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const teamRef = await addDoc(collection(db, 'teams'), {
             name: teamName,
             creatorId: user.uid,
             memberIds: [user.uid],
-            teamCode
+            teamCode,
+            marketCenterId: userData.marketCenterId || null
         });
         await updateDoc(doc(db, 'users', user.uid), { teamId: teamRef.id, role: 'team_leader' });
-    }, [user]);
+    }, [user, userData]);
 
     const updateTheme = useCallback(async (theme: string) => {
         const db = getFirestoreInstance();
@@ -348,10 +380,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return snap.docs.map(processUserDoc);
     }, []);
 
-    const getAllUsers = useCallback(async () => {
+    const getAllUsers = useCallback(async (marketCenterId?: string) => {
         const db = getFirestoreInstance();
         if (!db) return [];
-        const snap = await getDocs(collection(db, 'users'));
+        let q = query(collection(db, 'users'));
+        if (marketCenterId) {
+            q = query(collection(db, 'users'), where('marketCenterId', '==', marketCenterId));
+        }
+        const snap = await getDocs(q);
         return snap.docs.map(processUserDoc);
     }, []);
 
@@ -661,10 +697,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await batch.commit();
     }, []);
 
-    const getAllTeams = useCallback(async () => {
+    const getAllTeams = useCallback(async (marketCenterId?: string) => {
         const db = getFirestoreInstance();
         if (!db) return [];
-        const snap = await getDocs(collection(db, 'teams'));
+        let q = query(collection(db, 'teams'));
+        if (marketCenterId) {
+            q = query(collection(db, 'teams'), where('marketCenterId', '==', marketCenterId));
+        }
+        const snap = await getDocs(q);
         return snap.docs.map(processTeamDoc);
     }, []);
 
@@ -937,7 +977,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [userData]);
 
     const value = useMemo(() => ({
-        user, userData, loading, managedAgents, loadingAgents, agentsError,
+        user, userData, mcBranding, loading, managedAgents, loadingAgents, agentsError,
         signUpWithEmail, createAccountForAgent, signInWithEmail, logout,
         updateUserProfile, updatePassword, joinTeam, createTeam, updateTheme, getTeamById, getUsersByIds,
         getAllUsers, getUsersForMarketCenter, leaveTeam, removeAgentFromTeam, getUserById, updateUserNewAgentStatus, getNewAgentResourcesForUser,
@@ -956,7 +996,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts,
         sendSms
     }), [
-        user, userData, loading, managedAgents, loadingAgents, agentsError,
+        user, userData, mcBranding, loading, managedAgents, loadingAgents, agentsError,
         signUpWithEmail, createAccountForAgent, signInWithEmail, logout,
         updateUserProfile, updatePassword, joinTeam, createTeam, updateTheme, getTeamById, getUsersByIds,
         getAllUsers, getUsersForMarketCenter, leaveTeam, removeAgentFromTeam, getUserById, updateUserNewAgentStatus, getNewAgentResourcesForUser,
