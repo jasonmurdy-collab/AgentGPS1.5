@@ -1,11 +1,12 @@
 
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { GoalProvider } from './contexts/GoalContext';
 import { AuthProvider, useAuth, P } from './contexts/AuthContext';
 import { Spinner } from './components/ui/Spinner';
 import { TransactionsProvider } from './contexts/TransactionsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { CURATED_PALETTES } from './constants/branding';
 
 // Import layout components
 import { MainLayout } from './layouts/MainLayout';
@@ -225,6 +226,15 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
+    useEffect(() => {
+        // Apply the 'Classic Keller' palette on load
+        const theme = CURATED_PALETTES[0].colors;
+        const root = document.documentElement;
+        root.style.setProperty('--color-primary', theme.primary);
+        root.style.setProperty('--color-secondary', theme.secondary);
+        root.style.setProperty('--color-accent-bg', theme.accent);
+    }, []);
+
     return (
         <HashRouter>
             <AuthProvider>

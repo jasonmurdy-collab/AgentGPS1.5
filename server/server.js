@@ -11,19 +11,28 @@ const axios = require('axios');
 const https = require('https');
 const path = require('path');
 const WebSocket = require('ws');
+const cors = require('cors');
 const { URLSearchParams, URL } = require('url');
 const rateLimit = require('express-rate-limit');
 const twilio = require('twilio');
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Enable CORS for all routes
+app.use(cors({
+    origin: '*', // In production, you might want to restrict this to your actual app domains
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Goog-Api-Key'],
+    credentials: true
+}));
 const externalApiBaseUrl = 'https://generativelanguage.googleapis.com';
 const externalWsBaseUrl = 'wss://generativelanguage.googleapis.com';
 // Support either API key env-var variant
 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
-const staticPath = path.join(__dirname,'dist');
-const publicPath = path.join(__dirname,'public');
+const staticPath = path.join(__dirname, '..', 'dist');
+const publicPath = path.join(__dirname, 'public');
 
 
 if (!apiKey) {
@@ -61,15 +70,6 @@ app.use('/api-proxy', async (req, res, next) => {
     // If the request is an upgrade request, it's for WebSockets, so pass to next middleware/handler
     if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
         return next(); // Pass to the WebSocket upgrade handler
-    }
-
-    // Handle OPTIONS request for CORS preflight
-    if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', '*'); // Adjust as needed for security
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Goog-Api-Key');
-        res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight response for 1 day
-        return res.sendStatus(200);
     }
 
     if (req.body) { // Only log body if it exists
@@ -234,12 +234,25 @@ if ('serviceWorker' in navigator) {
 </script>
 `;
 
+app.use('/public', express.static(publicPath));
+app.use(express.static(staticPath));
+
+app.get('/service-worker.js', (req, res) => {
+   return res.sendFile(path.join(publicPath, 'service-worker.js'));
+});
+
 // Serve index.html or placeholder based on API key and file availability
-app.get('/', (req, res) => {
+// This is the SPA fallback - it handles all GET requests that haven't been matched yet
+app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/api-proxy')) {
+        return res.status(404).json({ error: 'Not Found' });
+    }
+
     const placeholderPath = path.join(publicPath, 'placeholder.html');
 
     // Try to serve index.html
-    console.log("LOG: Route '/' accessed. Attempting to serve index.html.");
+    console.log(`LOG: Route '${req.path}' accessed. Attempting to serve index.html as SPA fallback.`);
     const indexPath = path.join(staticPath, 'index.html');
 
     fs.readFile(indexPath, 'utf8', (err, indexHtmlData) => {
@@ -274,13 +287,6 @@ app.get('/', (req, res) => {
         res.send(injectedHtml);
     });
 });
-
-app.get('/service-worker.js', (req, res) => {
-   return res.sendFile(path.join(publicPath, 'service-worker.js'));
-});
-
-app.use('/public', express.static(publicPath));
-app.use(express.static(staticPath));
 
 // Start the HTTP server
 const server = app.listen(port, () => {

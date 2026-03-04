@@ -1,33 +1,125 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --font-heading: "Poppins", sans-serif;
+  --font-body: "Roboto", sans-serif;
+
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-text-primary: #1a202c;
+  --color-text-secondary: #4a5568;
+  --color-primary: #b40101;
+  --color-on-primary: #ffffff;
+  --color-secondary: #333333;
+  --color-accent-bg: #f5f5f5;
+  --color-accent: #3b82f6;
+  --color-accent-text: #ffffff;
+  --color-accent-secondary: #38b2ac;
+  --color-border: #e2e8f0;
+  --color-input-bg: #edf2f7;
+  --color-destructive: #e53e3e;
+  --color-on-destructive: #ffffff;
+  --color-destructive-surface: #fed7d7;
+  --color-success: #38a169;
+  --color-on-success: #ffffff;
+  --color-success-surface: #c6f6d5;
+  --color-warning: #d69e2e;
+  --color-on-warning: #1a202c;
+  --color-warning-surface: #feebc8;
+
+  --radius-custom: 16px; /* Material 3 standard */
+}
+
+html.dark {
+  --color-bg: #1a202c;
+  --color-surface: #2d3748;
+  --color-text-primary: #f7fafc;
+  --color-text-secondary: #a0aec0;
+  --color-accent-bg: #2d3748;
+  --color-accent-secondary: #4fd1c5;
+  --color-border: #4a5568;
+  --color-input-bg: #4a5568;
+  --color-destructive: #fc8181;
+  --color-on-destructive: #1a202c;
+  --color-destructive-surface: #4a2121;
+  --color-success: #68d391;
+  --color-on-success: #1a202c;
+  --color-success-surface: #254e38;
+  --color-warning: #f6e05e;
+  --color-on-warning: #1a202c;
+  --color-warning-surface: #544214;
+}
 
 @theme {
-  --font-sans: var(--font-body, "Inter", ui-sans-serif, system-ui, sans-serif);
-  --font-heading: var(--font-heading, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-primary: var(--color-primary, #B40101);
-  --color-secondary: var(--color-secondary, #333333);
-  --color-accent-bg: var(--color-accent-bg, #F5F5F5);
-  --color-surface: var(--color-surface, #FFFFFF);
+  --color-background: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-primary: var(--color-primary);
+  --color-on-primary: var(--color-on-primary);
+  --color-secondary: var(--color-secondary);
+  --color-accent-bg: var(--color-accent-bg);
+  --color-accent: var(--color-accent);
+  --color-accent-text: var(--color-accent-text);
+  --color-on-accent: var(--color-on-primary, var(--color-accent-text));
+  --color-accent-secondary: var(--color-accent-secondary);
+  --color-border: var(--color-border);
+  --color-input: var(--color-input-bg);
+  --color-destructive: var(--color-destructive);
+  --color-on-destructive: var(--color-on-destructive);
+  --color-destructive-surface: var(--color-destructive-surface);
+  --color-success: var(--color-success);
+  --color-on-success: var(--color-on-success);
+  --color-success-surface: var(--color-success-surface);
+  --color-warning: var(--color-warning);
+  --color-on-warning: var(--color-on-warning);
+  --color-warning-surface: var(--color-warning-surface);
 
-  --radius-custom: var(--border-radius, 12px);
-
-  /* Map existing semantic colors to use these variables if needed */
+  --radius-custom: var(--radius-custom);
 }
 
 @layer base {
-  h1, h2, h3, h4, h5, h6 {
+  html, body, #root {
+    height: 100%;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
     font-family: var(--font-heading);
   }
+
   body {
-    font-family: var(--font-sans);
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
-  * {
+  
+  input, button, .card, .rounded-custom {
     border-radius: var(--radius-custom);
   }
-  /* Exclude some elements from global border radius if needed */
-  input, button, .card, .bg-surface, .rounded-xl, .rounded-2xl, .rounded-lg {
-    border-radius: var(--radius-custom) !important;
+
+  html.dark .logo-img {
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+  }
+
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-secondary);
   }
 }

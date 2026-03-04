@@ -45,6 +45,12 @@ export const CoachInsights: React.FC<CoachInsightsProps> = React.memo(({ agentsW
     const totalProgress = allGoals.reduce((sum, goal) => sum + calculateProgress(goal), 0);
     const averageCompletion = allGoals.length > 0 ? (totalProgress / allGoals.length).toFixed(0) : '0';
 
+    const totalGci = agentsWithGoals.reduce((sum, awg) => {
+        // This is a rough estimate since we don't have all transactions here, 
+        // but we can use the agent's GCI field if it's updated.
+        return sum + (awg.agent.gci || 0);
+    }, 0);
+
     const weeklyGoals = allGoals.filter(g => g.type === 'Weekly');
     const onTrackWeeklyGoalsCount = weeklyGoals.filter(g => calculateProgress(g) >= 50).length;
     const weeklyOnTrackPercentage = weeklyGoals.length > 0 ? ((onTrackWeeklyGoalsCount / weeklyGoals.length) * 100).toFixed(0) : '0';
@@ -84,6 +90,10 @@ export const CoachInsights: React.FC<CoachInsightsProps> = React.memo(({ agentsW
                      <div className="bg-background/50 p-3 rounded-lg">
                         <p className="text-xs text-text-secondary uppercase tracking-wider">Avg. Completion</p>
                         <p className="text-2xl font-bold text-text-primary">{averageCompletion}%</p>
+                    </div>
+                     <div className="bg-background/50 p-3 rounded-lg">
+                        <p className="text-xs text-text-secondary uppercase tracking-wider">Team GCI (Lifetime)</p>
+                        <p className="text-2xl font-bold text-text-primary">${totalGci.toLocaleString()}</p>
                     </div>
                      <div className="bg-background/50 p-3 rounded-lg">
                         <p className="text-xs text-text-secondary uppercase tracking-wider">Weekly Goals On Track</p>

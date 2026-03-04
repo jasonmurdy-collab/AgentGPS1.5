@@ -6,17 +6,41 @@ import { useGoals } from '../contexts/GoalContext';
 import { WelcomeCard } from '../components/dashboard/WelcomeCard';
 import { GpsSummaryCard } from '../components/dashboard/GpsSummaryCard';
 import { SkeletonCard } from '../components/ui/SkeletonCard';
-import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Video } from 'lucide-react';
+import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Video, Settings2, ChevronUp, ChevronDown, Check, X as CloseIcon, Eye, EyeOff, Maximize2, Minimize2, Calendar } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { useAuth, P } from '../contexts/AuthContext';
 import { DashboardVisualizations } from '../components/dashboard/DashboardVisualizations';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import type { Goal, Playbook, LiveSession } from '../types';
+import type { Goal, Playbook, LiveSession, DashboardWidgetConfig } from '../types';
 import { GoalModal } from '../components/goals/AddGoalModal';
 import { processPlaybookDoc } from '../lib/firestoreUtils';
 import AnnouncementFeed from '../components/dashboard/AnnouncementFeed';
 import { LiveSessionCard } from '../components/launchpad/LiveSessionCard';
+
+type WidgetId = 'quick-actions' | 'live-sessions' | 'welcome' | 'goals' | 'learning' | 'announcements' | 'stats' | 'gps';
+
+const DEFAULT_LAYOUT: DashboardWidgetConfig[] = [
+    { id: 'quick-actions', span: 2, visible: true },
+    { id: 'live-sessions', span: 2, visible: true },
+    { id: 'welcome', span: 2, visible: true },
+    { id: 'goals', span: 2, visible: true },
+    { id: 'learning', span: 2, visible: true },
+    { id: 'announcements', span: 1, visible: true },
+    { id: 'stats', span: 1, visible: true },
+    { id: 'gps', span: 1, visible: true }
+];
+
+const WIDGET_METADATA: Record<WidgetId, { title: string }> = {
+    'quick-actions': { title: 'Quick Actions' },
+    'live-sessions': { title: 'Live Sessions' },
+    'welcome': { title: 'Welcome' },
+    'goals': { title: 'Top Goals' },
+    'learning': { title: 'My Learning' },
+    'announcements': { title: 'Announcements' },
+    'stats': { title: 'Key Metrics' },
+    'gps': { title: 'GPS Summary' }
+};
 
 const UpcomingLiveSessions: React.FC = () => {
     const { userData } = useAuth();
@@ -92,6 +116,12 @@ const MobileQuickActions: React.FC = () => {
             color: 'bg-accent-secondary' 
         },
         { 
+            label: 'Calendar', 
+            icon: Calendar, 
+            path: '/calendar',
+            color: 'bg-emerald-500' 
+        },
+        { 
             label: 'New Task', 
             icon: ListTodo, 
             path: '/todos',
@@ -100,7 +130,7 @@ const MobileQuickActions: React.FC = () => {
     ];
 
     return (
-        <div className="lg:hidden grid grid-cols-3 gap-3 mb-6">
+        <div className="lg:hidden grid grid-cols-4 gap-3 mb-6">
             {actions.map((action, i) => (
                 <Link key={i} to={action.path} className="flex flex-col items-center gap-2">
                     <div className={`${action.color} w-full aspect-square rounded-2xl flex items-center justify-center text-white shadow-lg shadow-${action.color}/20`}>
@@ -210,12 +240,20 @@ const DashboardLoadingSkeleton: React.FC = () => (
 
 const DashboardPage: React.FC = () => {
   const { goals, loading: goalsLoading, updateGoal, deleteGoal, toggleGoalArchiveStatus } = useGoals();
-  const { userData, loading: authLoading } = useAuth();
+  const { userData, loading: authLoading, updateDashboardLayout } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'visualizations'>('overview');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [goalToEdit, setGoalToEdit] = useState<Goal | null>(null);
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
   const [loadingPlaybooks, setLoadingPlaybooks] = useState(true);
+  const [isEditingLayout, setIsEditingLayout] = useState(false);
+  const [layout, setLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_LAYOUT);
+
+  useEffect(() => {
+    if (userData?.dashboardLayout && userData.dashboardLayout.length > 0) {
+        setLayout(userData.dashboardLayout);
+    }
+  }, [userData?.dashboardLayout]);
 
   const currentUserGCI = userData?.gci || 0;
   const currentUserListings = userData?.listings || 0;
@@ -284,6 +322,28 @@ const DashboardPage: React.FC = () => {
     await toggleGoalArchiveStatus(goalId, currentStatus);
   };
 
+  const handleSaveLayout = async () => {
+    await updateDashboardLayout(layout);
+    setIsEditingLayout(false);
+  };
+
+  const handleResetLayout = () => {
+    setLayout(DEFAULT_LAYOUT);
+  };
+
+  const moveWidget = (index: number, direction: 'up' | 'down') => {
+    const newLayout = [...layout];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newLayout.length) return;
+    
+    [newLayout[index], newLayout[targetIndex]] = [newLayout[targetIndex], newLayout[index]];
+    setLayout(newLayout);
+  };
+
+  const updateWidgetConfig = (id: string, updates: Partial<DashboardWidgetConfig>) => {
+    setLayout(prev => prev.map(w => w.id === id ? { ...w, ...updates } : w));
+  };
+
   const topGoals = useMemo(() => {
     return [...goals]
       .sort((a, b) => {
@@ -304,52 +364,155 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="p-4 sm:p-6 lg:p-8">
-        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">Dashboard</h1>
-        <p className="text-lg text-text-secondary mt-1">Your command center for growth and productivity.</p>
-        <div className="mt-6 flex items-center gap-2 p-1 bg-surface rounded-lg w-fit">
-            <button onClick={() => setActiveTab('overview')} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
-                <LayoutGrid size={16}/> Overview
-            </button>
-            <button onClick={() => setActiveTab('visualizations')} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'visualizations' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
-                <BarChart2 size={16}/> Visualizations
-            </button>
+      <header className="p-4 sm:p-6 lg:p-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">Dashboard</h1>
+            <p className="text-lg text-text-secondary mt-1">Your command center for growth and productivity.</p>
+            <div className="mt-6 flex items-center gap-2 p-1 bg-surface rounded-lg w-fit">
+                <button onClick={() => setActiveTab('overview')} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                    <LayoutGrid size={16}/> Overview
+                </button>
+                <button onClick={() => setActiveTab('visualizations')} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'visualizations' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                    <BarChart2 size={16}/> Visualizations
+                </button>
+            </div>
         </div>
+
+        {activeTab === 'overview' && (
+            <div className="flex items-center gap-2">
+                {!isEditingLayout && (
+                    <Link to="/calendar" className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/5 border border-primary/20 rounded-lg transition-all">
+                        <Calendar size={16}/> Training Calendar
+                    </Link>
+                )}
+                {isEditingLayout ? (
+                    <>
+                        <button onClick={handleResetLayout} className="px-4 py-2 text-sm font-bold text-text-secondary hover:text-text-primary transition-colors">
+                            Reset to Default
+                        </button>
+                        <button onClick={() => setIsEditingLayout(false)} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-text-secondary hover:bg-surface rounded-lg transition-all">
+                            <CloseIcon size={16}/> Cancel
+                        </button>
+                        <button onClick={handleSaveLayout} className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-success text-white rounded-lg hover:bg-opacity-90 shadow-lg shadow-success/20 transition-all">
+                            <Check size={16}/> Save Layout
+                        </button>
+                    </>
+                ) : (
+                    <button onClick={() => setIsEditingLayout(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-text-secondary hover:bg-surface border border-border rounded-lg transition-all">
+                        <Settings2 size={16}/> Customize Layout
+                    </button>
+                )}
+            </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
         {activeTab === 'overview' ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <MobileQuickActions />
-              <UpcomingLiveSessions />
-              <WelcomeCard />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {topGoals.length > 0 ? (
-                  topGoals.map(goal => 
-                    <GoalProgressCard 
-                        key={goal.id} 
-                        goal={goal} 
-                        onEdit={() => handleOpenModalForEdit(goal)}
-                        onDelete={() => handleDeleteGoal(goal.id)}
-                        onArchive={() => handleToggleArchive(goal.id, !!goal.isArchived)}
-                    />
-                  )
-                ) : (
-                  <>
-                    <GoalPlaceholderCard title="Set an Annual Goal" description="Define your big-picture target for the year."/>
-                    <GoalPlaceholderCard title="Set a Quarterly Goal" description="Break down your annual goal into 90-day milestones."/>
-                    <GoalPlaceholderCard title="Set a Weekly Goal" description="Establish your key actions for the week ahead."/>
-                  </>
-                )}
-              </div>
-              <MyLearning playbooks={playbooks} progress={userData?.playbookProgress || {}}/>
-            </div>
-            <div className="lg:col-span-1 space-y-6">
-              <AnnouncementFeed />
-              <StatsCard gci={currentUserGCI} listings={currentUserListings} />
-              <GpsSummaryCard />
-            </div>
+            {layout.map((config, index) => {
+                const widgetId = config.id as WidgetId;
+                const metadata = WIDGET_METADATA[widgetId];
+                if (!config.visible && !isEditingLayout) return null;
+
+                let content;
+                switch (widgetId) {
+                    case 'quick-actions': content = <MobileQuickActions />; break;
+                    case 'live-sessions': content = <UpcomingLiveSessions />; break;
+                    case 'welcome': content = <WelcomeCard />; break;
+                    case 'goals': 
+                        content = (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {topGoals.length > 0 ? (
+                                    topGoals.map(goal => 
+                                        <GoalProgressCard 
+                                            key={goal.id} 
+                                            goal={goal} 
+                                            onEdit={() => handleOpenModalForEdit(goal)}
+                                            onDelete={() => handleDeleteGoal(goal.id)}
+                                            onArchive={() => handleToggleArchive(goal.id, !!goal.isArchived)}
+                                        />
+                                    )
+                                ) : (
+                                    <>
+                                        <GoalPlaceholderCard title="Set an Annual Goal" description="Define your big-picture target for the year."/>
+                                        <GoalPlaceholderCard title="Set a Quarterly Goal" description="Break down your annual goal into 90-day milestones."/>
+                                        <GoalPlaceholderCard title="Set a Weekly Goal" description="Establish your key actions for the week ahead."/>
+                                    </>
+                                )}
+                            </div>
+                        );
+                        break;
+                    case 'learning': content = <MyLearning playbooks={playbooks} progress={userData?.playbookProgress || {}}/>; break;
+                    case 'announcements': content = <AnnouncementFeed />; break;
+                    case 'stats': content = <StatsCard gci={currentUserGCI} listings={currentUserListings} />; break;
+                    case 'gps': content = <GpsSummaryCard />; break;
+                    default: content = null;
+                }
+
+                if (!content) return null;
+
+                const spanClass = config.span === 3 ? 'lg:col-span-3' : config.span === 2 ? 'lg:col-span-2' : 'lg:col-span-1';
+
+                return (
+                    <div key={widgetId} className={`${spanClass} relative group transition-all duration-300`}>
+                        {isEditingLayout && (
+                            <div className="absolute -top-4 -left-4 z-10 flex items-center gap-1 bg-surface border border-border rounded-xl shadow-2xl p-1.5 animate-in fade-in zoom-in duration-200 ring-4 ring-background">
+                                <div className="flex items-center gap-0.5 pr-2 border-r border-border mr-1">
+                                    <button 
+                                        onClick={() => moveWidget(index, 'up')} 
+                                        disabled={index === 0}
+                                        className="p-1.5 hover:bg-primary/10 text-text-secondary hover:text-primary disabled:opacity-30 transition-colors rounded-lg"
+                                        title="Move Up"
+                                    >
+                                        <ChevronUp size={16}/>
+                                    </button>
+                                    <button 
+                                        onClick={() => moveWidget(index, 'down')} 
+                                        disabled={index === layout.length - 1}
+                                        className="p-1.5 hover:bg-primary/10 text-text-secondary hover:text-primary disabled:opacity-30 transition-colors rounded-lg"
+                                        title="Move Down"
+                                    >
+                                        <ChevronDown size={16}/>
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-0.5 pr-2 border-r border-border mr-1">
+                                    <button 
+                                        onClick={() => updateWidgetConfig(widgetId, { span: Math.max(1, config.span - 1) as 1|2|3 })}
+                                        disabled={config.span === 1}
+                                        className="p-1.5 hover:bg-primary/10 text-text-secondary hover:text-primary disabled:opacity-30 transition-colors rounded-lg"
+                                        title="Narrower"
+                                    >
+                                        <Minimize2 size={16}/>
+                                    </button>
+                                    <button 
+                                        onClick={() => updateWidgetConfig(widgetId, { span: Math.min(3, config.span + 1) as 1|2|3 })}
+                                        disabled={config.span === 3}
+                                        className="p-1.5 hover:bg-primary/10 text-text-secondary hover:text-primary disabled:opacity-30 transition-colors rounded-lg"
+                                        title="Wider"
+                                    >
+                                        <Maximize2 size={16}/>
+                                    </button>
+                                </div>
+
+                                <button 
+                                    onClick={() => updateWidgetConfig(widgetId, { visible: !config.visible })}
+                                    className={`p-1.5 transition-colors rounded-lg ${config.visible ? 'text-success hover:bg-success/10' : 'text-text-secondary hover:bg-surface'}`}
+                                    title={config.visible ? 'Hide Widget' : 'Show Widget'}
+                                >
+                                    {config.visible ? <Eye size={16}/> : <EyeOff size={16}/>}
+                                </button>
+
+                                <div className="h-4 w-px bg-border mx-1"></div>
+                                <span className="text-[10px] font-black uppercase tracking-widest px-2 text-text-secondary whitespace-nowrap">{metadata.title}</span>
+                            </div>
+                        )}
+                        <div className={`h-full ${isEditingLayout ? 'opacity-50 scale-[0.98] blur-[1px] pointer-events-none border-2 border-dashed border-primary/30 rounded-2xl transition-all' : ''} ${!config.visible && isEditingLayout ? 'grayscale opacity-20' : ''}`}>
+                            {content}
+                        </div>
+                    </div>
+                );
+            })}
           </div>
         ) : (
             <DashboardVisualizations goals={goals} userData={userData ? { ...userData, gci: currentUserGCI, listings: currentUserListings } : null} />

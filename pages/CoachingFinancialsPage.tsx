@@ -111,8 +111,13 @@ const CoachingFinancialsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
     
     const contributingAgentIds = useMemo(() => {
-        return Object.keys(userData?.contributingAgentIds || {});
-    }, [userData?.contributingAgentIds]);
+        const ids = Object.keys(userData?.contributingAgentIds || {});
+        // If no settings saved yet, default to all managed agents
+        if (ids.length === 0 && managedAgents.length > 0) {
+            return managedAgents.map(a => a.id);
+        }
+        return ids;
+    }, [userData?.contributingAgentIds, managedAgents]);
 
     const contributingAgents = useMemo(() => {
         return managedAgents.filter(a => contributingAgentIds.includes(a.id));
@@ -125,27 +130,38 @@ const CoachingFinancialsPage: React.FC = () => {
                 setTransactions([]);
                 return;
             }
+            
+            if (contributingAgents.length === 0) {
+                setLoading(false);
+                setTransactions([]);
+                return;
+            }
+
             setLoading(true);
             setError(null);
             try {
-                // Securely query for all transactions this coach can see
-                const q = query(collection(getFirestoreInstance(), 'transactions'), where('coachId', '==', user.uid));
-                const querySnapshot = await getDocs(q);
-                
-                const allCoachTransactions = querySnapshot.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        ...data,
-                        acceptanceDate: data.acceptanceDate?.toDate ? data.acceptanceDate.toDate().toISOString() : data.acceptanceDate,
-                    } as Transaction;
-                });
+                const db = getFirestoreInstance();
+                const transactionsRef = collection(db, 'transactions');
+                const allFetchedTransactions: Transaction[] = [];
 
-                // Filter client-side based on the selected contributing agents
-                const contributingAgentIdsSet = new Set(contributingAgents.map(a => a.id));
-                const filteredTransactions = allCoachTransactions.filter(t => contributingAgentIdsSet.has(t.userId));
+                // Chunk the agent IDs for the 'in' query (limit 30)
+                const agentIds = contributingAgents.map(a => a.id);
+                for (let i = 0; i < agentIds.length; i += 30) {
+                    const chunk = agentIds.slice(i, i + 30);
+                    const q = query(transactionsRef, where('userId', 'in', chunk));
+                    const querySnapshot = await getDocs(q);
+                    
+                    querySnapshot.docs.forEach(doc => {
+                        const data = doc.data();
+                        allFetchedTransactions.push({
+                            id: doc.id,
+                            ...data,
+                            acceptanceDate: data.acceptanceDate?.toDate ? data.acceptanceDate.toDate().toISOString() : data.acceptanceDate,
+                        } as Transaction);
+                    });
+                }
                 
-                setTransactions(filteredTransactions);
+                setTransactions(allFetchedTransactions);
 
             } catch (err: any) {
                 console.error("Error fetching transactions:", err);

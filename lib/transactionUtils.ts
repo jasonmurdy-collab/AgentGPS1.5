@@ -67,7 +67,7 @@ export const processTransactionsForUser = (
 
   const transactionsWithGCI = transactions.map(t => ({
     ...t,
-    gci: t.salePrice * (t.commissionRate / 100),
+    gci: t.totalCommission !== undefined ? t.totalCommission : t.salePrice * (t.commissionRate / 100),
   }));
 
   if (!profile) {

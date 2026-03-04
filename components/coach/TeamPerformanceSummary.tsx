@@ -30,25 +30,36 @@ export const TeamPerformanceSummary: React.FC<TeamPerformanceSummaryProps> = Rea
         const totalAgents = agents?.length || 0;
         const totalTransactionsCount = transactions?.length || 0;
         const totalGoalsCount = goals ? Object.values(goals).flat().filter(Boolean).length : 0;
+        
+        const totalGci = transactions?.reduce((sum, t) => {
+            const gci = t.totalCommission !== undefined ? t.totalCommission : t.salePrice * (t.commissionRate / 100);
+            return sum + gci;
+        }, 0) || 0;
 
         return {
             totalAgents,
             totalTransactionsCount,
             totalGoalsCount,
+            totalGci
         };
     }, [agents, transactions, goals]);
 
     return (
         <Card>
             <h2 className="text-2xl font-bold mb-4">{title}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard 
                     title="Total Agents" 
                     value={summary.totalAgents.toLocaleString()} 
                     icon={Users}
                 />
                 <StatCard 
-                    title="Transactions Logged" 
+                    title="Total Team GCI" 
+                    value={`$${summary.totalGci.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} 
+                    icon={BarChartHorizontal}
+                />
+                <StatCard 
+                    title="Transactions" 
                     value={summary.totalTransactionsCount.toLocaleString()} 
                     icon={BarChartHorizontal}
                 />

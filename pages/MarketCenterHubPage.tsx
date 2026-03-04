@@ -26,7 +26,7 @@ const Gauge: FC<{ value: number; maxValue: number; label: string }> = ({ value, 
     const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
     const strokeDashoffset = 283 * (1 - (percentage / 100)); // 283 is circumference of circle with r=45
     return (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center relative">
             <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
                 <circle className="text-border" strokeWidth="10" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
                 <circle
@@ -43,9 +43,9 @@ const Gauge: FC<{ value: number; maxValue: number; label: string }> = ({ value, 
                     style={{ transition: 'stroke-dashoffset 0.5s ease-in-out' }}
                 />
             </svg>
-            <div className="text-center -mt-20">
-                <p className="text-3xl font-bold">{value.toFixed(2)}</p>
-                <p className="text-sm text-text-secondary">{label}</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pt-2">
+                <p className="text-3xl font-black text-text-primary leading-none">{value.toFixed(2)}</p>
+                <p className="text-[10px] font-bold text-text-secondary uppercase tracking-tighter mt-1">{label}</p>
             </div>
         </div>
     );

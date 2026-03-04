@@ -60,24 +60,29 @@ const CoachTransactionsPage: React.FC = () => {
 
             try {
                 const transactionsRef = collection(getFirestoreInstance(), 'transactions');
-                let tQuery;
+                const allTransactions: Transaction[] = [];
 
                 if (P.isSuperAdmin(userData)) {
-                    tQuery = query(transactionsRef);
+                    const tSnap = await getDocs(query(transactionsRef));
+                    allTransactions.push(...tSnap.docs.map(processTransactionDoc));
                 } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                    tQuery = query(transactionsRef, where('marketCenterId', '==', userData.marketCenterId));
-                } else if (P.isCoach(userData) && !P.isMcAdmin(userData)) { // Productivity coach specifically
-                    tQuery = query(transactionsRef, where('coachId', '==', user.uid));
-                } else if (P.isTeamLeader(userData) && userData.teamId) { // Team leader who isn't a coach
-                    tQuery = query(transactionsRef, where('teamId', '==', userData.teamId));
+                    const tSnap = await getDocs(query(transactionsRef, where('marketCenterId', '==', userData.marketCenterId)));
+                    allTransactions.push(...tSnap.docs.map(processTransactionDoc));
+                } else if (P.isCoach(userData) || (P.isTeamLeader(userData) && userData.teamId)) {
+                    // Use managed agents list for both Coaches and Team Leaders to be consistent and robust
+                    const agentIds = agents.map(a => a.id);
+                    if (agentIds.length > 0) {
+                        for (let i = 0; i < agentIds.length; i += 30) {
+                            const chunk = agentIds.slice(i, i + 30);
+                            const tSnap = await getDocs(query(transactionsRef, where('userId', 'in', chunk)));
+                            allTransactions.push(...tSnap.docs.map(processTransactionDoc));
+                        }
+                    }
                 } else {
                     setProcessedTransactions([]);
                     setLoading(false);
                     return;
                 }
-                
-                const tSnap = await getDocs(tQuery);
-                const allTransactions = tSnap.docs.map(processTransactionDoc);
                 
                 if (allTransactions.length === 0) {
                     setProcessedTransactions([]);

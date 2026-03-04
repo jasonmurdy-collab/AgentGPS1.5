@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, LogOut, ClipboardList, ListTodo, X, Plus, Target, UserPlus, UserCheck, Phone, CalendarCheck, CheckCircle2 } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
-import { logoUrl } from '../assets';
+import { BrandedLogo } from '../components/ui/BrandedLogo';
 import { NotificationBell } from '../components/notifications/NotificationBell';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, updateDoc, setDoc, collection, query, where, getDocs, increment } from 'firebase/firestore';
@@ -101,7 +101,7 @@ export const MainLayout: React.FC = () => {
         const root = document.documentElement;
         if (mcBranding) {
             if (mcBranding.colors.primary) {
-                root.style.setProperty('--color-primary', mcBranding.colors.primary);
+                root.style.setProperty('--color-primary-custom', mcBranding.colors.primary);
                 
                 // Calculate contrast color for text on primary background
                 const hex = mcBranding.colors.primary.replace('#', '');
@@ -109,26 +109,26 @@ export const MainLayout: React.FC = () => {
                 const g = parseInt(hex.substr(2, 2), 16);
                 const b = parseInt(hex.substr(4, 2), 16);
                 const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-                root.style.setProperty('--color-on-primary', (yiq >= 128) ? '#000000' : '#FFFFFF');
+                root.style.setProperty('--color-on-primary-custom', (yiq >= 128) ? '#000000' : '#FFFFFF');
             }
-            if (mcBranding.colors.secondary) root.style.setProperty('--color-secondary', mcBranding.colors.secondary);
-            if (mcBranding.colors.accent) root.style.setProperty('--color-accent-bg', mcBranding.colors.accent);
-            if (mcBranding.colors.surface) root.style.setProperty('--color-surface', mcBranding.colors.surface);
+            if (mcBranding.colors.secondary) root.style.setProperty('--color-secondary-custom', mcBranding.colors.secondary);
+            if (mcBranding.colors.accent) root.style.setProperty('--color-accent-bg-custom', mcBranding.colors.accent);
+            if (mcBranding.colors.surface) root.style.setProperty('--color-surface-custom', mcBranding.colors.surface);
             
             if (mcBranding.typography.headingFont) root.style.setProperty('--font-heading', mcBranding.typography.headingFont);
             if (mcBranding.typography.bodyFont) root.style.setProperty('--font-body', mcBranding.typography.bodyFont);
 
-            if (mcBranding.style?.borderRadius) root.style.setProperty('--border-radius', mcBranding.style.borderRadius);
+            if (mcBranding.style?.borderRadius) root.style.setProperty('--border-radius-custom', mcBranding.style.borderRadius);
         } else {
             // Reset to defaults
-            root.style.removeProperty('--color-primary');
-            root.style.removeProperty('--color-on-primary');
-            root.style.removeProperty('--color-secondary');
-            root.style.removeProperty('--color-accent-bg');
-            root.style.removeProperty('--color-surface');
+            root.style.removeProperty('--color-primary-custom');
+            root.style.removeProperty('--color-on-primary-custom');
+            root.style.removeProperty('--color-secondary-custom');
+            root.style.removeProperty('--color-accent-bg-custom');
+            root.style.removeProperty('--color-surface-custom');
             root.style.removeProperty('--font-heading');
             root.style.removeProperty('--font-body');
-            root.style.removeProperty('--border-radius');
+            root.style.removeProperty('--border-radius-custom');
         }
     }, [mcBranding]);
 
@@ -144,7 +144,6 @@ export const MainLayout: React.FC = () => {
 
     const isLeadership = P.isTeamLeader(userData) || P.isCoach(userData);
     const isDarkMode = userData?.theme === 'dark';
-    const logoToUse = isDarkMode && mcBranding?.darkLogoUrl ? mcBranding.darkLogoUrl : (mcBranding?.logoUrl || logoUrl);
 
     return (
         <div className="flex h-screen bg-background text-text-primary overflow-hidden">
@@ -158,8 +157,12 @@ export const MainLayout: React.FC = () => {
             <aside className={`bg-surface border-r border-border flex flex-col transition-transform duration-300 fixed inset-y-0 left-0 z-50 w-72 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="flex items-center justify-between p-4 h-20 border-b border-border flex-shrink-0">
                     <div className="flex items-center">
-                        <img src={logoToUse} alt="AgentGPS Logo" className="h-8 w-auto logo-img" />
-                        {!logoToUse && <span className="font-heading font-bold text-lg ml-2">AgentGPS</span>}
+                        <BrandedLogo 
+                            logoUrl={mcBranding?.logoUrl} 
+                            darkLogoUrl={mcBranding?.darkLogoUrl} 
+                            isDarkMode={isDarkMode} 
+                            className="h-8 w-auto logo-img"
+                        />
                     </div>
                     <button onClick={() => handleSetIsSidebarOpen(false)} className="lg:hidden p-2 hover:bg-primary/10 rounded-full">
                         <X size={20} />

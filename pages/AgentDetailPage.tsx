@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, P } from '../contexts/AuthContext';
 import { useGoals } from '../contexts/GoalContext';
 import { Card } from '../components/ui/Card';
@@ -9,9 +9,10 @@ import { GoalModal } from '../components/goals/AddGoalModal';
 import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
 import { AssignHomeworkModal } from '../components/coach/AssignHomeworkModal';
 import { ChangeRoleModal } from '../components/coach/ChangeRoleModal';
-import type { Goal, TeamMember, NewAgentHomework, DailyTrackerData, Playbook, PerformanceLog, DiscoveryGuideData, OrgBlueprint, Transaction, HabitTrackerTemplate, HabitActivitySetting } from '../types';
+import type { Goal, TeamMember, NewAgentHomework, DailyTrackerData, Playbook, PerformanceLog, DiscoveryGuideData, OrgBlueprint, Transaction, HabitTrackerTemplate, HabitActivitySetting, CommissionProfile } from '../types';
 import { EconomicModelData } from './BusinessGpsPage';
-import { LayoutDashboard, Target, BookOpen, ClipboardList, UserCheck, MessageSquare, CheckSquare, Star, ArrowLeft, Plus, GraduationCap, Trash2, Compass, Network, BarChart, Users, Hash, ArrowDown, AlertTriangle, DollarSign, BarChart2, ClipboardSignature, FileCheck, Search, Home, Briefcase, ShieldCheck, PhoneCall, MapPin, Settings2, Globe, ChevronDown, PlusCircle } from 'lucide-react';
+import { processTransactionsForUser } from '../lib/transactionUtils';
+import { LayoutDashboard, Target, BookOpen, ClipboardList, UserCheck, MessageSquare, CheckSquare, Star, ArrowLeft, Plus, GraduationCap, Trash2, Compass, Network, BarChart, DollarSign, BarChart2, ClipboardSignature, FileCheck, Search, Home, Briefcase, ChevronDown, PlusCircle } from 'lucide-react';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 
@@ -44,7 +45,7 @@ const PlaybookProgressSummary: React.FC<{
     agent: TeamMember;
     playbooks: Playbook[];
     homework: NewAgentHomework[];
-    onDeleteHomework: (homeworkId: string, userId: string) => void;
+    onDeleteHomework: (homeworkId: string) => void;
 }> = ({ agent, playbooks, homework, onDeleteHomework }) => {
     const progressData = agent.playbookProgress || {};
     const homeworkByWeek = useMemo(() => homework.reduce((acc, hw) => {
@@ -98,7 +99,7 @@ const PlaybookProgressSummary: React.FC<{
                                                     <p className="font-medium text-text-primary">{hw.title}</p>
                                                     {hw.url && <a href={hw.url} target="_blank" rel="noopener noreferrer" className="text-accent text-xs hover:underline">View &rarr;</a>}
                                                 </div>
-                                                <button onClick={() => onDeleteHomework(hw.id, agent.id)} className="p-1 text-destructive hover:bg-destructive/10 rounded-full flex-shrink-0"><Trash2 size={14}/></button>
+                                                <button onClick={() => onDeleteHomework(hw.id)} className="p-1 text-destructive hover:bg-destructive/10 rounded-full flex-shrink-0"><Trash2 size={14}/></button>
                                             </div>
                                         </div>
                                     ))}
@@ -307,7 +308,8 @@ const AgentDetailPage: React.FC = () => {
     const { 
         user, userData, getUserById, getAssignedResourcesForUser, getHabitLogsForUser, 
         getPerformanceLogsForAgent, getPlaybooksForUser, updateUserNewAgentStatus, assignHomeworkToUser, 
-        deleteHomeworkForUser, updateUserRole, removeAgentFromTeam, getOrgBlueprintForUser, getTransactionsForUser
+        deleteHomeworkForUser, updateUserRole, getOrgBlueprintForUser, getTransactionsForUser,
+        getCommissionProfileForUser
     } = useAuth();
     const { addGoal, updateGoal, deleteGoal, toggleGoalArchiveStatus, getGoalsForUser } = useGoals();
 
@@ -321,6 +323,7 @@ const AgentDetailPage: React.FC = () => {
     const [economicModelData, setEconomicModelData] = useState<EconomicModelData | null>(null);
     const [blueprint, setBlueprint] = useState<OrgBlueprint | null>(null);
     const [agentTransactions, setAgentTransactions] = useState<Transaction[]>([]);
+    const [agentProfile, setAgentProfile] = useState<CommissionProfile | null>(null);
     const [habitSettings, setHabitSettings] = useState<HabitTrackerTemplate | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -353,20 +356,23 @@ const AgentDetailPage: React.FC = () => {
 
             const [
                 fetchedGoals, assignedResources, fetchedHabitLogs, fetchedPlaybooks, 
-                fetchedPerformanceLogs, fetchedBlueprint, fetchedTransactions, gpsDocSnap
+                fetchedPerformanceLogs, fetchedBlueprint, fetchedTransactions, gpsDocSnap,
+                fetchedProfile
             ] = await Promise.all([
                 getGoalsForUser(agentId), getAssignedResourcesForUser(agentId), getHabitLogsForUser(agentId),
                 getPlaybooksForUser(agentId), getPerformanceLogsForAgent(agentId), getOrgBlueprintForUser(agentId),
-                getTransactionsForUser(agentId), getDoc(doc(getFirestoreInstance(), 'businessGps', agentId))
+                getTransactionsForUser(agentId), getDoc(doc(getFirestoreInstance(), 'businessGps', agentId)),
+                getCommissionProfileForUser(agentId)
             ]);
 
-            setGoals(fetchedGoals.sort((a,b) => (a.isArchived ? 1 : -1)));
+            setGoals(fetchedGoals.sort((a) => (a.isArchived ? 1 : -1)));
             setHomework(assignedResources.homework);
             setHabitLogs(fetchedHabitLogs);
             setPlaybooks(fetchedPlaybooks);
             setPerformanceLogs(fetchedPerformanceLogs);
             setBlueprint(fetchedBlueprint);
             setAgentTransactions(fetchedTransactions);
+            setAgentProfile(fetchedProfile);
             
             if (gpsDocSnap.exists()) {
                 const fetchedGps = gpsDocSnap.data();
@@ -398,7 +404,7 @@ const AgentDetailPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [agentId, user, getUserById, getGoalsForUser, getAssignedResourcesForUser, getHabitLogsForUser, getPlaybooksForUser, getPerformanceLogsForAgent, getOrgBlueprintForUser, getTransactionsForUser]);
+    }, [agentId, user, getUserById, getGoalsForUser, getAssignedResourcesForUser, getHabitLogsForUser, getPlaybooksForUser, getPerformanceLogsForAgent, getOrgBlueprintForUser, getTransactionsForUser, getCommissionProfileForUser]);
 
     useEffect(() => {
         fetchData();
@@ -423,6 +429,27 @@ const AgentDetailPage: React.FC = () => {
         return { totalGCI, totalUnitsSold, buyerUnitPercentage, sellerUnitsSold, sellerAppointmentsNeeded, sellerAppointmentsFromSold, buyerUnitsSold, buyerAppointmentsNeeded, buyerAppointmentsFromSold, totalAppointmentsNeeded, appointmentsPerWeek, appointmentsPerDay };
     }, [economicModelData]);
 
+    const performanceStats = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const ytdTransactions = agentTransactions.filter(t => new Date(t.acceptanceDate).getFullYear() === currentYear);
+        
+        // Use processTransactionsForUser to get accurate financial breakdown
+        const processedYtd = processTransactionsForUser(ytdTransactions, agentProfile);
+        const processedLifetime = processTransactionsForUser(agentTransactions, agentProfile);
+
+        const calculateTotals = (txs: any[]) => txs.reduce((acc, t) => ({
+            gci: acc.gci + t.gci,
+            net: acc.net + t.netCommission,
+            company: acc.company + t.companyDollarPaid,
+            count: acc.count + 1
+        }), { gci: 0, net: 0, company: 0, count: 0 });
+
+        return {
+            ytd: calculateTotals(processedYtd),
+            lifetime: calculateTotals(processedLifetime)
+        };
+    }, [agentTransactions, agentProfile]);
+
 
     const handleToggleNewAgentStatus = async () => { if (!agent) return; await updateUserNewAgentStatus(agent.id, !agent.isNewAgent); setAgent(prev => prev ? { ...prev, isNewAgent: !prev.isNewAgent } : null); };
     const handleOpenGoalModalForAdd = () => { setGoalToEdit(null); setIsGoalModalOpen(true); };
@@ -432,9 +459,8 @@ const AgentDetailPage: React.FC = () => {
     const handleDeleteGoal = async (goalId: string) => { if (window.confirm("Are you sure you want to delete this goal?")) { await deleteGoal(goalId); fetchData(); } };
     const handleToggleArchiveGoal = async (goalId: string, currentStatus: boolean) => { await toggleGoalArchiveStatus(goalId, currentStatus); fetchData(); };
     const handleAssignHomework = async (homeworkData: Omit<NewAgentHomework, 'id' | 'userId' | 'teamId' | 'marketCenterId'>) => { if (!agent) return; await assignHomeworkToUser(agent.id, homeworkData); fetchData(); setIsHomeworkModalOpen(false); };
-    const handleDeleteHomework = async (homeworkId: string, userId: string) => { if (window.confirm("Are you sure?")) { await deleteHomeworkForUser(homeworkId); fetchData(); } };
+    const handleDeleteHomework = async (homeworkId: string) => { if (window.confirm("Are you sure?")) { await deleteHomeworkForUser(homeworkId); fetchData(); } };
     const handleChangeRole = async (newRole: TeamMember['role']) => { if (!agent) return; await updateUserRole(agent.id, newRole); fetchData(); setIsChangeRoleModalOpen(false); };
-    const handleRemoveAgent = async () => { if (!agent) return; if (window.confirm(`Are you sure you want to remove ${agent.name} from your program/team?`)) { await removeAgentFromTeam(agent.id); navigate('/team-hub'); } };
 
     if (loading) return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-10 h-10"/></div>;
     if (error || !agent) return <Card className="m-8 text-center py-12 bg-destructive-surface border-destructive text-destructive"><h2 className="text-2xl font-bold">Error</h2><p className="mt-2">{error || "Agent not found."}</p></Card>;
@@ -480,11 +506,25 @@ const AgentDetailPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <KpiDisplay label="Total GCI" value={`$${(agent.gci || 0).toLocaleString()}`} />
-                            <KpiDisplay label="Units Taken" value={agent.listings || 0} />
-                            <KpiDisplay label="Calls Made" value={agent.calls || 0} />
-                            <KpiDisplay label="Appts Met" value={agent.appointments || 0} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card className="bg-primary/5 border-primary/20">
+                                <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Year to Date (YTD)</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <KpiDisplay label="Gross GCI" value={`$${performanceStats.ytd.gci.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+                                    <KpiDisplay label="Units" value={performanceStats.ytd.count} />
+                                    <KpiDisplay label="Net Comm." value={`$${performanceStats.ytd.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+                                    <KpiDisplay label="Company $" value={`$${performanceStats.ytd.company.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+                                </div>
+                            </Card>
+                            <Card className="md:col-span-2">
+                                <p className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-2">Lifetime Totals</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <KpiDisplay label="Total GCI" value={`$${performanceStats.lifetime.gci.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+                                    <KpiDisplay label="Total Units" value={performanceStats.lifetime.count} />
+                                    <KpiDisplay label="Total Calls" value={agent.calls || 0} />
+                                    <KpiDisplay label="Total Appts" value={agent.appointments || 0} />
+                                </div>
+                            </Card>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <Card>

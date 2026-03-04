@@ -86,7 +86,7 @@ interface AuthContextType {
   deleteHomeworkForUser: (homeworkId: string) => Promise<void>;
   getCommissionProfileForUser: (userId: string) => Promise<CommissionProfile | null>;
   saveCommissionProfile: (profileData: Omit<CommissionProfile, 'id'>) => Promise<void>;
-  getAllTransactions: () => Promise<Transaction[]>;
+  getTransactionsForManagedUsers: () => Promise<Transaction[]>;
   getTransactionsForUser: (userId: string) => Promise<Transaction[]>;
   getAllCommissionProfiles: () => Promise<CommissionProfile[]>;
   addPerformanceLog: (logData: Omit<PerformanceLog, 'id' | 'coachId' | 'date'>) => Promise<void>;
@@ -143,6 +143,7 @@ interface AuthContextType {
   getUndatedTodosForUser: () => Promise<TodoItem[]>;
   getLinkableContacts: () => Promise<{ leads: ClientLead[], candidates: Candidate[] }>;
   sendSms: (to: string, body: string) => Promise<{ success: boolean; error?: string }>;
+  updateDashboardLayout: (layout: string[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -516,12 +517,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await setDoc(doc(db, 'commissionProfiles', user.uid), profileData);
     }, [user]);
 
-    const getAllTransactions = useCallback(async () => {
+    const getTransactionsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
-        if (!db) return [];
-        const snap = await getDocs(collection(db, 'transactions'));
-        return snap.docs.map(processTransactionDoc);
-    }, []);
+        if (!db || managedAgents.length === 0) return [];
+        const agentIds = managedAgents.map(a => a.id);
+        const allTransactions: Transaction[] = [];
+        
+        // Chunk the agent IDs for the 'in' query (limit 30)
+        for (let i = 0; i < agentIds.length; i += 30) {
+            const chunk = agentIds.slice(i, i + 30);
+            const q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
+            const snap = await getDocs(q);
+            allTransactions.push(...snap.docs.map(processTransactionDoc));
+        }
+        
+        return allTransactions;
+    }, [managedAgents]);
 
     const getTransactionsForUser = useCallback(async (userId: string) => {
         const db = getFirestoreInstance();
@@ -976,6 +987,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [userData]);
 
+    const updateDashboardLayout = useCallback(async (layout: string[]) => {
+        const db = getFirestoreInstance();
+        if (!user || !db) return;
+        await updateDoc(doc(db, 'users', user.uid), { dashboardLayout: layout });
+    }, [user]);
+
     const value = useMemo(() => ({
         user, userData, mcBranding, loading, managedAgents, loadingAgents, agentsError,
         signUpWithEmail, createAccountForAgent, signInWithEmail, logout,
@@ -983,7 +1000,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         getAllUsers, getUsersForMarketCenter, leaveTeam, removeAgentFromTeam, getUserById, updateUserNewAgentStatus, getNewAgentResourcesForUser,
         saveNewAgentResources, updateUserMetrics, assignHomeworkToUser, getAssignedResourcesForUser,
         getHomeworkForManagedUsers, getHabitLogsForManagedUsers, getHabitLogsForUser, deleteHomeworkForUser, getCommissionProfileForUser,
-        saveCommissionProfile, getAllTransactions, getTransactionsForUser, getAllCommissionProfiles, addPerformanceLog,
+        saveCommissionProfile, getTransactionsForManagedUsers, getTransactionsForUser, getAllCommissionProfiles, addPerformanceLog, 
         getPerformanceLogsForAgent, getPerformanceLogsForCurrentUser, getPerformanceLogsForManagedUsers, updatePerformanceLog, updateContributingAgents,
         updateCoachRoster, updateUserCoachAssignment, updateUserTeamAffiliation, getBudgetModelForUser, saveBudgetModel, getMarketCenters, createMarketCenter, deleteMarketCenter, assignMcAdmin,
         removeMcAdmin, updateUserMarketCenter, updateUserMarketCenterForAdmin, updateUserRole, updateUserRoleAndMarketCenterAffiliation, getAllTeams, getAllTransactionsForAdmin,
@@ -994,7 +1011,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addClientLead, updateClientLead, deleteClientLead, getClientLeadsForUser, getClientLeadsForTeam, getClientLeadActivities, addClientLeadActivity,
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
         addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts,
-        sendSms
+        sendSms, updateDashboardLayout
     }), [
         user, userData, mcBranding, loading, managedAgents, loadingAgents, agentsError,
         signUpWithEmail, createAccountForAgent, signInWithEmail, logout,
@@ -1002,7 +1019,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         getAllUsers, getUsersForMarketCenter, leaveTeam, removeAgentFromTeam, getUserById, updateUserNewAgentStatus, getNewAgentResourcesForUser,
         saveNewAgentResources, updateUserMetrics, assignHomeworkToUser, getAssignedResourcesForUser,
         getHomeworkForManagedUsers, getHabitLogsForManagedUsers, getHabitLogsForUser, deleteHomeworkForUser, getCommissionProfileForUser,
-        saveCommissionProfile, getAllTransactions, getTransactionsForUser, getAllCommissionProfiles, addPerformanceLog,
+        saveCommissionProfile, getTransactionsForManagedUsers, getTransactionsForUser, getAllCommissionProfiles, addPerformanceLog,
         getPerformanceLogsForAgent, getPerformanceLogsForCurrentUser, getPerformanceLogsForManagedUsers, updatePerformanceLog, updateContributingAgents,
         updateCoachRoster, updateUserCoachAssignment, updateUserTeamAffiliation, getBudgetModelForUser, saveBudgetModel, getMarketCenters, createMarketCenter, deleteMarketCenter, assignMcAdmin,
         removeMcAdmin, updateUserMarketCenter, updateUserMarketCenterForAdmin, updateUserRole, updateUserRoleAndMarketCenterAffiliation, getAllTeams, getAllTransactionsForAdmin,
@@ -1013,7 +1030,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addClientLead, updateClientLead, deleteClientLead, getClientLeadsForUser, getClientLeadsForTeam, getClientLeadActivities, addClientLeadActivity,
         regenerateZapierApiKey, getWebhooks, saveWebhook, deleteWebhook,
         addTodo, updateTodo, deleteTodo, getTodosForUserDateRange, getUndatedTodosForUser, getLinkableContacts,
-        sendSms
+        sendSms, updateDashboardLayout
     ]);
 
     return (

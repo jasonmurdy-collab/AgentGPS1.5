@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Users, Video, Send, Globe } from 'lucide-react';
+import { X, Calendar, Clock, Users, Send, Globe } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
 import type { LiveSession, TeamMember } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,11 +21,10 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [platform, setPlatform] = useState<'google-meet' | 'zoom'>('google-meet');
+  const [meetingUrl, setMeetingUrl] = useState('');
   
   // For client-consult
   const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
   
   // For mc-training
   const [targetRoles, setTargetRoles] = useState<TeamMember['role'][]>([]);
@@ -38,21 +37,14 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
 
     setLoading(true);
     try {
-      // In a real app, this would call a Cloud Function to generate the meeting link
-      // For this implementation, we'll simulate the link generation
-      // The architectural explanation will cover the backend logic
-      const simulatedMeetingUrl = platform === 'google-meet' 
-        ? `https://meet.google.com/${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`
-        : `https://zoom.us/j/${Math.floor(Math.random() * 1000000000)}`;
-
       const sessionData: Omit<LiveSession, 'id'> = {
         title,
         description,
         startTime: new Date(`${date}T${startTime}`).toISOString(),
         endTime: new Date(`${date}T${endTime}`).toISOString(),
         sessionType,
-        platform,
-        meetingUrl: simulatedMeetingUrl,
+        platform: 'google-meet', // Defaulting for type compatibility
+        meetingUrl: meetingUrl,
         hostId: user.uid,
         hostName: userData.name,
         marketCenterId: userData.marketCenterId,
@@ -60,15 +52,14 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
         status: 'scheduled',
         createdAt: new Date().toISOString(),
         distribution: {
-          emailSent: true, // Simulated
-          notificationSent: true, // Simulated
+          emailSent: false,
+          notificationSent: true,
           sentAt: new Date().toISOString()
         }
       };
 
       if (sessionType === 'client-consult') {
         sessionData.clientName = clientName;
-        sessionData.clientEmail = clientEmail;
       } else {
         sessionData.targetAudience = {
           roles: targetRoles
@@ -194,25 +185,21 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
           </div>
 
           <div className="border-t border-border pt-6">
-            <label className="block text-xs font-black text-text-secondary uppercase tracking-widest mb-3 text-center">Select Platform</label>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setPlatform('google-meet')}
-                className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${platform === 'google-meet' ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-text-secondary text-text-secondary'}`}
-              >
-                <Video size={24} />
-                <span className="font-bold">Google Meet</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlatform('zoom')}
-                className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${platform === 'zoom' ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-text-secondary text-text-secondary'}`}
-              >
-                <Video size={24} />
-                <span className="font-bold">Zoom</span>
-              </button>
+            <label className="block text-xs font-black text-text-secondary uppercase tracking-widest mb-3">Meeting Link (Zoom, Google Meet, etc.)</label>
+            <div className="relative">
+              <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+              <input
+                required
+                type="url"
+                value={meetingUrl}
+                onChange={(e) => setMeetingUrl(e.target.value)}
+                placeholder="https://zoom.us/j/..."
+                className="w-full bg-input border border-border rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              />
             </div>
+            <p className="text-[10px] text-text-secondary mt-2 italic">
+              Paste the link for your already created event here.
+            </p>
           </div>
 
           {sessionType === 'client-consult' ? (
@@ -221,7 +208,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
                 <Users size={20} />
                 <h3 className="font-bold">Client Information</h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <input
                   required
                   type="text"
@@ -230,18 +217,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
                   placeholder="Client Full Name"
                   className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 />
-                <input
-                  required
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="Client Email Address"
-                  className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                />
               </div>
-              <p className="text-xs text-text-secondary italic">
-                The client will receive an automated invitation with the meeting link once scheduled.
-              </p>
             </div>
           ) : (
             <div className="bg-surface-hover p-6 rounded-2xl space-y-4">
@@ -284,7 +260,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
               ) : (
                 <>
                   <Send size={20} />
-                  GENERATE & DISTRIBUTE SESSION
+                  SCHEDULE SESSION
                 </>
               )}
             </button>

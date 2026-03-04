@@ -23,6 +23,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
         type: 'Listing Sale',
         salePrice: 0,
         commissionRate: 2.5,
+        totalCommission: undefined,
         conditionsDate: '',
         closeDate: '',
         expiryDate: '',
@@ -43,6 +44,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                         type: transactionToEdit.type,
                         salePrice: transactionToEdit.salePrice,
                         commissionRate: transactionToEdit.commissionRate,
+                        totalCommission: transactionToEdit.totalCommission,
                         conditionsDate: toInputDate(transactionToEdit.conditionsDate),
                         closeDate: toInputDate(transactionToEdit.closeDate),
                         expiryDate: toInputDate(transactionToEdit.expiryDate),
@@ -56,6 +58,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                         type: 'Listing Sale',
                         salePrice: 0,
                         commissionRate: 2.5,
+                        totalCommission: undefined,
                         conditionsDate: '',
                         closeDate: '',
                         expiryDate: '',
@@ -77,7 +80,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.address || formData.salePrice <= 0 || formData.commissionRate <= 0) {
+        if (!formData.address || formData.salePrice < 0 || formData.commissionRate < 0) {
             alert('Please fill out address, sale price, and commission rate with valid values.');
             return;
         }
@@ -123,6 +126,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                                 <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-secondary">%</span>
                             </div>
                         </div>
+                    </div>
+
+                    <div>
+                        <label htmlFor="totalCommission" className={labelClasses}>Total GCI Override <span className="text-xs font-normal">(Optional - use for flat fees or splits)</span></label>
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-text-secondary">$</span>
+                            <input type="number" id="totalCommission" name="totalCommission" value={formData.totalCommission || ''} onChange={handleChange} className={`${inputClasses} pl-7`} placeholder="Leave blank to auto-calculate" />
+                        </div>
+                        <p className="text-[10px] text-text-secondary mt-1 italic">If left blank, GCI will be calculated as: Sale Price × Commission Rate</p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

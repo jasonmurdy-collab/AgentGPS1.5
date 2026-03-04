@@ -90,6 +90,13 @@ export interface TeamMember {
   twilioSid?: string;
   twilioToken?: string;
   twilioNumber?: string;
+  dashboardLayout?: DashboardWidgetConfig[];
+}
+
+export interface DashboardWidgetConfig {
+  id: string;
+  span: 1 | 2 | 3;
+  visible: boolean;
 }
 
 // Add missing types that are used in the app
@@ -208,6 +215,7 @@ export interface Transaction {
   type: 'Listing Sale' | 'Buyer Sale' | 'Lease';
   salePrice: number;
   commissionRate: number;
+  totalCommission?: number; // Optional override for GCI
   closeDate?: string;
   conditionsDate?: string;
   expiryDate?: string;

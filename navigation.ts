@@ -10,7 +10,7 @@ import {
 export const navItems = {
     // Core
     DASHBOARD: { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
-    CALENDAR: { name: 'Calendar', icon: CalendarIcon, path: '/calendar' },
+    TRAINING_CALENDAR: { name: 'Training Calendar', icon: CalendarIcon, path: '/calendar' },
     
     // Hubs (The new Spoke-entry points)
     MY_BUSINESS_HUB: { name: 'My Business', icon: Compass, path: '/business-hub' },
@@ -35,7 +35,7 @@ export const navItems = {
 export const agentNavSections = [
     {
         title: 'Home',
-        items: [ navItems.DASHBOARD ]
+        items: [ navItems.DASHBOARD, navItems.TRAINING_CALENDAR ]
     },
     {
         title: 'Daily Execution',
@@ -57,7 +57,7 @@ export const agentNavSections = [
 export const teamLeaderNavSections = [
     {
         title: 'Home',
-        items: [ navItems.DASHBOARD ]
+        items: [ navItems.DASHBOARD, navItems.TRAINING_CALENDAR ]
     },
     {
         title: 'Execution',
@@ -83,7 +83,7 @@ export const teamLeaderNavSections = [
 export const recruiterNavSections = [
     {
         title: 'Home',
-        items: [ navItems.DASHBOARD ]
+        items: [ navItems.DASHBOARD, navItems.TRAINING_CALENDAR ]
     },
     {
         title: 'Recruiting',
@@ -102,7 +102,7 @@ export const recruiterNavSections = [
 export const coachNavSections = [
     {
         title: 'Home',
-        items: [ { name: 'Coaching Hub', icon: Briefcase, path: '/' } ]
+        items: [ { name: 'Coaching Hub', icon: Briefcase, path: '/' }, navItems.TRAINING_CALENDAR ]
     },
     {
         title: 'Strategy',

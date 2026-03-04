@@ -1,36 +1,30 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
-import { type Goal, type TeamMember, NewAgentHomework, DailyTrackerData, Transaction, ProspectingSession, Playbook, PerformanceLog } from '../types';
+import { type TeamMember, DailyTrackerData, Transaction, Goal } from '../types';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Plus, GraduationCap, Trash2, ChevronDown, ChevronUp, MoreVertical, Edit, Search, Activity, UserCheck, BookOpen, Archive, MessageSquare, CheckSquare, Star, Target, DollarSign, BarChart2, LayoutDashboard, ClipboardList, ChevronRight, AlertTriangle, PieChart, Users, TrendingUp, Settings, PlusCircle } from 'lucide-react';
+import { GraduationCap, Trash2, MoreVertical, Search, UserCheck, Target, Settings, PlusCircle } from 'lucide-react';
 import { GoalModal } from '../components/goals/AddGoalModal';
 import { useGoals } from '../contexts/GoalContext';
-import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
 import { CoachInsights } from '../components/coach/CoachInsights';
 import { TeamPerformanceSummary } from '../components/coach/TeamPerformanceSummary';
-import { AssignBulkGoalModal } from '../components/coach/AssignBulkGoalModal';
 import { AssignHomeworkModal } from '../components/coach/AssignHomeworkModal';
 import { ChangeRoleModal } from '../components/coach/ChangeRoleModal';
-import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, query, where, getDocs, onSnapshot, doc } from 'firebase/firestore';
-import { processGoalDoc, processDailyTrackerDoc, processTransactionDoc } from '../lib/firestoreUtils';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 // --- AGENT CARD COMPONENT ---
 const AgentCard: React.FC<{
     agent: TeamMember;
     habitLogs: DailyTrackerData[];
+    transactions: Transaction[];
     isTeamLeader: boolean;
-    isMcAdmin: boolean;
-    onToggleNewAgentStatus: (agentId: string, currentStatus: boolean) => void;
     onAssignGoal: (agent: TeamMember) => void;
     onAssignHomework: (agent: TeamMember) => void;
     onRemoveAgent: (agentId: string, agentName: string) => void;
     onChangeRole: (agent: TeamMember) => void;
 }> = ({
-    agent, habitLogs, isTeamLeader, isMcAdmin, onToggleNewAgentStatus, onAssignGoal,
+    agent, habitLogs, transactions, isTeamLeader, onAssignGoal,
     onAssignHomework, onRemoveAgent, onChangeRole
 }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -52,6 +46,16 @@ const AgentCard: React.FC<{
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         return habitLogs.filter(log => new Date(log.date) >= sevenDaysAgo).length;
     }, [habitLogs]);
+
+    const ytdGci = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        return transactions
+            .filter(t => new Date(t.acceptanceDate).getFullYear() === currentYear)
+            .reduce((sum, t) => {
+                const gci = t.totalCommission !== undefined ? t.totalCommission : t.salePrice * (t.commissionRate / 100);
+                return sum + gci;
+            }, 0);
+    }, [transactions]);
 
     const handleCardClick = () => {
         navigate(`/agent/${agent.id}`);
@@ -93,8 +97,8 @@ const AgentCard: React.FC<{
             
             <div className="grid grid-cols-2 gap-4 text-center mt-auto pt-4 border-t border-border">
                  <div className="bg-background/50 p-2 rounded-lg">
-                    <p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">GCI</p>
-                    <p className="text-lg font-bold text-text-primary">${(agent.gci || 0).toLocaleString()}</p>
+                    <p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">YTD GCI</p>
+                    <p className="text-lg font-bold text-text-primary">${ytdGci.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                 </div>
                 <div className="bg-background/50 p-2 rounded-lg">
                     <p className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Logs (7d)</p>
@@ -114,7 +118,7 @@ const AgentCard: React.FC<{
 
 
 const CoachHubPage: React.FC = () => {
-    const { user, userData, managedAgents, loadingAgents, getHabitLogsForManagedUsers, getAllTransactions, getAllCommissionProfiles, removeAgentFromTeam, updateUserNewAgentStatus, assignHomeworkToUser, updateUserRole } = useAuth();
+    const { userData, managedAgents, loadingAgents, getHabitLogsForManagedUsers, getTransactionsForManagedUsers, removeAgentFromTeam, assignHomeworkToUser, updateUserRole } = useAuth();
     const { addGoal, getGoalsForUser } = useGoals();
     const navigate = useNavigate();
     const [loadingData, setLoadingData] = useState(true);
@@ -134,14 +138,14 @@ const CoachHubPage: React.FC = () => {
         const [goalsData, logsData, transactionsData] = await Promise.all([
             Promise.all(managedAgents.map(agent => getGoalsForUser(agent.id).then(goals => ({ agentId: agent.id, goals })))),
             getHabitLogsForManagedUsers(),
-            getAllTransactions()
+            getTransactionsForManagedUsers()
         ]);
 
         setAgentGoals(goalsData.reduce((acc, { agentId, goals }) => ({ ...acc, [agentId]: goals }), {}));
         setAgentHabitLogs(logsData);
         setAllTransactions(transactionsData);
         setLoadingData(false);
-    }, [loadingAgents, userData, managedAgents, getGoalsForUser, getHabitLogsForManagedUsers, getAllTransactions]);
+    }, [loadingAgents, userData, managedAgents, getGoalsForUser, getHabitLogsForManagedUsers, getTransactionsForManagedUsers]);
 
     useEffect(() => {
         setTimeout(() => fetchData(), 0);
@@ -160,7 +164,6 @@ const CoachHubPage: React.FC = () => {
     const handleSaveHomework = async (homeworkData: any) => { if (selectedAgent) await assignHomeworkToUser(selectedAgent.id, homeworkData); };
     const handleSaveRole = async (newRole: TeamMember['role']) => { if (selectedAgent) await updateUserRole(selectedAgent.id, newRole); };
     const handleRemoveAgent = async (agentId: string, agentName: string) => { if (window.confirm(`Are you sure you want to remove ${agentName}?`)) await removeAgentFromTeam(agentId); };
-    const handleToggleNewAgent = async (agentId: string, currentStatus: boolean) => { await updateUserNewAgentStatus(agentId, !currentStatus); };
     
     if (loadingAgents || loadingData) {
         return <div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8"/></div>;
@@ -196,13 +199,12 @@ const CoachHubPage: React.FC = () => {
                                 key={agent.id}
                                 agent={agent}
                                 habitLogs={agentHabitLogs[agent.id] || []}
+                                transactions={allTransactions.filter(t => t.userId === agent.id)}
                                 isTeamLeader={P.isTeamLeader(userData)}
-                                isMcAdmin={P.isMcAdmin(userData)}
                                 onAssignGoal={handleAssignGoal}
                                 onAssignHomework={handleAssignHomework}
                                 onChangeRole={handleChangeRole}
                                 onRemoveAgent={handleRemoveAgent}
-                                onToggleNewAgentStatus={handleToggleNewAgent}
                             />
                         ))}
                     </div>

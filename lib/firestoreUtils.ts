@@ -40,6 +40,7 @@ export const processTransactionDoc = (doc: DocumentSnapshot): Transaction => {
         type: data.type || 'Listing Sale',
         salePrice: data.salePrice || 0,
         commissionRate: data.commissionRate || 0,
+        totalCommission: data.totalCommission || undefined,
         closeDate: (data.closeDate as Timestamp)?.toDate ? (data.closeDate as Timestamp).toDate().toISOString() : data.closeDate || undefined,
         conditionsDate: (data.conditionsDate as Timestamp)?.toDate ? (data.conditionsDate as Timestamp).toDate().toISOString() : data.conditionsDate || undefined,
         expiryDate: (data.expiryDate as Timestamp)?.toDate ? (data.expiryDate as Timestamp).toDate().toISOString() : data.expiryDate || undefined,

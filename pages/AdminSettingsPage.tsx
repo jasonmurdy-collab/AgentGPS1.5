@@ -28,13 +28,15 @@ import {
     Palette
 } from 'lucide-react';
 import { useAuth, P } from '../contexts/AuthContext';
-import type { MarketCenter, TeamMember, Announcement, LiveSession, MarketCenterBranding } from '../types';
+import type { MarketCenter, Announcement, LiveSession, MarketCenterBranding } from '../types';
 import { Spinner } from '../components/ui/Spinner';
-import { getFirestoreInstance } from '../firebaseConfig';
+import { getFirestoreInstance, getStorageInstance } from '../firebaseConfig';
 import { collection, getDocs, addDoc, serverTimestamp, orderBy, query, deleteDoc, doc, where, updateDoc, getDoc, limit } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
+import { BrandedLogo } from '../components/ui/BrandedLogo';
 import { ScheduleSessionModal } from '../components/launchpad/ScheduleSessionModal';
-import { CURATED_FONTS, CURATED_PALETTES, CURATED_CORNER_STYLES, CURATED_NAV_STYLES } from '../constants/branding';
+import { CURATED_FONTS, CURATED_PALETTES, CURATED_CORNER_STYLES } from '../constants/branding';
 
 const getContrastColor = (hex: string) => {
     if (!hex) return 'white';
@@ -43,82 +45,6 @@ const getContrastColor = (hex: string) => {
     const b = parseInt(hex.slice(5, 7), 16);
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
     return (yiq >= 128) ? 'black' : 'white';
-};
-
-const LaunchpadIntegrations: React.FC = () => {
-    const [integrations, setIntegrations] = useState<{ google?: boolean; zoom?: boolean }>({
-        google: false,
-        zoom: false
-    });
-
-    const handleConnect = (provider: 'google' | 'zoom') => {
-        // In a real app, this would trigger the OAuth flow
-        // For this demo, we'll simulate a successful connection
-        alert(`Connecting to ${provider}... In a production environment, this would open the ${provider} OAuth consent screen.`);
-        setIntegrations(prev => ({ ...prev, [provider]: true }));
-    };
-
-    const handleDisconnect = (provider: 'google' | 'zoom') => {
-        if (window.confirm(`Are you sure you want to disconnect ${provider}?`)) {
-            setIntegrations(prev => ({ ...prev, [provider]: false }));
-        }
-    };
-
-    return (
-        <Card className="mt-6">
-            <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-accent-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-accent-primary/20">
-                    <VideoIcon size={24}/>
-                </div>
-                <div>
-                    <h2 className="text-2xl font-bold">Launchpad Integrations</h2>
-                    <p className="text-sm text-text-secondary">Connect your video platforms to generate meeting links automatically.</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`p-6 rounded-2xl border-2 transition-all ${integrations.google ? 'border-success bg-success/5' : 'border-border bg-surface'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm border border-border">
-                                <VideoIcon size={20} className="text-blue-500" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold">Google Meet</h3>
-                                <p className="text-xs text-text-secondary">Google Workspace & Calendar</p>
-                            </div>
-                        </div>
-                        {integrations.google && <CheckCircle size={20} className="text-success" />}
-                    </div>
-                    {integrations.google ? (
-                        <button onClick={() => handleDisconnect('google')} className="w-full py-2 text-xs font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 rounded-lg transition-all">Disconnect</button>
-                    ) : (
-                        <button onClick={() => handleConnect('google')} className="w-full py-2 bg-primary text-on-accent text-xs font-black uppercase tracking-widest rounded-lg hover:bg-opacity-90 transition-all">Connect Google</button>
-                    )}
-                </div>
-
-                <div className={`p-6 rounded-2xl border-2 transition-all ${integrations.zoom ? 'border-success bg-success/5' : 'border-border bg-surface'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
-                                <VideoIcon size={20} className="text-white" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold">Zoom Video</h3>
-                                <p className="text-xs text-text-secondary">Zoom Meetings API</p>
-                            </div>
-                        </div>
-                        {integrations.zoom && <CheckCircle size={20} className="text-success" />}
-                    </div>
-                    {integrations.zoom ? (
-                        <button onClick={() => handleDisconnect('zoom')} className="w-full py-2 text-xs font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 rounded-lg transition-all">Disconnect</button>
-                    ) : (
-                        <button onClick={() => handleConnect('zoom')} className="w-full py-2 bg-primary text-on-accent text-xs font-black uppercase tracking-widest rounded-lg hover:bg-opacity-90 transition-all">Connect Zoom</button>
-                    )}
-                </div>
-            </div>
-        </Card>
-    );
 };
 
 const ConnectionCenter: React.FC = () => {
@@ -260,8 +186,6 @@ const ConnectionCenter: React.FC = () => {
                     </div>
                 )}
             </Card>
-
-            <LaunchpadIntegrations />
         </div>
     );
 };
@@ -543,6 +467,7 @@ const MarketCenterLeadershipSettings: React.FC = () => {
     const [mcData, setMcData] = useState<MarketCenter | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState<'light' | 'dark' | null>(null);
     const [calendarUrl, setCalendarUrl] = useState('');
     const [branding, setBranding] = useState<MarketCenterBranding>({
         colors: { primary: '#B40101', secondary: '#333333', accent: '#F5F5F5', surface: '#FFFFFF' },
@@ -606,6 +531,47 @@ const MarketCenterLeadershipSettings: React.FC = () => {
         }
     };
 
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark') => {
+        const file = e.target.files?.[0];
+        if (!file || !userData?.marketCenterId) return;
+
+        // Basic validation
+        if (!file.type.startsWith('image/')) {
+            alert("Please upload an image file.");
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            alert("File size must be less than 2MB.");
+            return;
+        }
+
+        setUploading(type);
+        try {
+            const storage = getStorageInstance();
+            if (!storage) throw new Error("Storage not initialized");
+
+            const fileExt = file.name.split('.').pop();
+            const fileName = `mc_logos/${userData.marketCenterId}/${type}_logo_${Date.now()}.${fileExt}`;
+            const storageRef = ref(storage, fileName);
+
+            await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(storageRef);
+
+            setBranding(prev => ({
+                ...prev,
+                [type === 'light' ? 'logoUrl' : 'darkLogoUrl']: downloadUrl
+            }));
+            
+            setFeedback(`${type === 'light' ? 'Primary' : 'Dark'} logo uploaded!`);
+            setTimeout(() => setFeedback(''), 3000);
+        } catch (error) {
+            console.error("Logo upload failed:", error);
+            alert("Failed to upload logo. Please try again.");
+        } finally {
+            setUploading(null);
+        }
+    };
+
     if (loading) return <div className="flex justify-center p-4"><Spinner /></div>;
     if (!mcData) return null;
 
@@ -648,30 +614,52 @@ const MarketCenterLeadershipSettings: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div className="space-y-6">
                             <div>
-                                <label className="block text-sm font-bold text-text-secondary mb-2 uppercase tracking-widest">Market Center Logo URL</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-text-secondary mb-1 uppercase opacity-50">Light Mode Logo</p>
-                                        <input 
-                                            type="text"
-                                            value={branding.logoUrl || ''}
-                                            onChange={e => setBranding(prev => ({ ...prev, logoUrl: e.target.value }))}
-                                            className="w-full bg-input border border-border rounded-xl px-4 py-2.5 text-sm"
-                                            placeholder="https://example.com/logo.png"
-                                        />
+                                <label className="block text-sm font-bold text-text-secondary mb-2 uppercase tracking-widest">Market Center Logo</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-bold text-text-secondary uppercase opacity-50">Light Mode Logo</p>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="h-16 bg-white border border-border rounded-xl flex items-center justify-center p-2 overflow-hidden">
+                                                <BrandedLogo logoUrl={branding.logoUrl} className="max-h-full w-auto" />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text"
+                                                    value={branding.logoUrl || ''}
+                                                    onChange={e => setBranding(prev => ({ ...prev, logoUrl: e.target.value }))}
+                                                    className="flex-1 bg-input border border-border rounded-lg px-3 py-1.5 text-xs"
+                                                    placeholder="URL or Storage Path"
+                                                />
+                                                <label className="cursor-pointer bg-primary/10 text-primary p-2 rounded-lg hover:bg-primary/20 transition-colors">
+                                                    {uploading === 'light' ? <Spinner className="w-4 h-4" /> : <Plus size={16} />}
+                                                    <input type="file" className="hidden" onChange={e => handleLogoUpload(e, 'light')} accept="image/*" />
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-text-secondary mb-1 uppercase opacity-50">Dark Mode Logo (Optional)</p>
-                                        <input 
-                                            type="text"
-                                            value={branding.darkLogoUrl || ''}
-                                            onChange={e => setBranding(prev => ({ ...prev, darkLogoUrl: e.target.value }))}
-                                            className="w-full bg-input border border-border rounded-xl px-4 py-2.5 text-sm"
-                                            placeholder="https://example.com/logo-dark.png"
-                                        />
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-bold text-text-secondary uppercase opacity-50">Dark Mode Logo (Optional)</p>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="h-16 bg-slate-900 border border-border rounded-xl flex items-center justify-center p-2 overflow-hidden">
+                                                <BrandedLogo logoUrl={branding.darkLogoUrl} isDarkMode={true} className="max-h-full w-auto" />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text"
+                                                    value={branding.darkLogoUrl || ''}
+                                                    onChange={e => setBranding(prev => ({ ...prev, darkLogoUrl: e.target.value }))}
+                                                    className="flex-1 bg-input border border-border rounded-lg px-3 py-1.5 text-xs"
+                                                    placeholder="URL or Storage Path"
+                                                />
+                                                <label className="cursor-pointer bg-primary/10 text-primary p-2 rounded-lg hover:bg-primary/20 transition-colors">
+                                                    {uploading === 'dark' ? <Spinner className="w-4 h-4" /> : <Plus size={16} />}
+                                                    <input type="file" className="hidden" onChange={e => handleLogoUpload(e, 'dark')} accept="image/*" />
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <p className="text-[10px] text-text-secondary mt-2">Recommended: Transparent PNG, approx. 200x50px.</p>
+                                <p className="text-[10px] text-text-secondary mt-3">Recommended: Transparent PNG, approx. 200x50px. Max 2MB.</p>
                             </div>
 
                             <div>
@@ -749,11 +737,7 @@ const MarketCenterLeadershipSettings: React.FC = () => {
                         <div className="bg-background rounded-2xl p-6 border border-border flex flex-col items-center justify-center text-center space-y-4" style={{ borderRadius: branding.style?.borderRadius }}>
                             <p className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Live Preview</p>
                             <div className="w-full max-w-[200px] h-12 bg-surface border border-border flex items-center justify-center mb-4 overflow-hidden" style={{ borderRadius: branding.style?.borderRadius }}>
-                                {branding.logoUrl ? (
-                                    <img src={branding.logoUrl} alt="Preview" className="max-h-8 w-auto" />
-                                ) : (
-                                    <span className="text-xs font-bold opacity-20 italic">No Logo Set</span>
-                                )}
+                                <BrandedLogo logoUrl={branding.logoUrl} className="max-h-8 w-auto" />
                             </div>
                             <h4 className="text-2xl font-bold" style={{ color: branding.colors.primary, fontFamily: branding.typography.headingFont }}>Sample Heading</h4>
                             <p className="text-sm text-text-secondary max-w-[250px]" style={{ fontFamily: branding.typography.bodyFont }}>
@@ -820,40 +804,26 @@ const MarketCenterLeadershipSettings: React.FC = () => {
 };
 
 const MarketCenterManagement: React.FC = () => {
-    const { getMarketCenters, createMarketCenter, deleteMarketCenter, assignMcAdmin, removeMcAdmin, getUsersByIds } = useAuth();
+    const { getMarketCenters, createMarketCenter, deleteMarketCenter } = useAuth();
     const [marketCenters, setMarketCenters] = useState<MarketCenter[]>([]);
-    const [adminsMap, setAdminsMap] = useState<Record<string, TeamMember[]>>({});
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newMcName, setNewMcName] = useState('');
     const [newMcNumber, setNewMcNumber] = useState('');
     const [newMcLocation, setNewMcLocation] = useState('');
     const [newMcAgentCount, setNewMcAgentCount] = useState('');
-    const [addAdminEmails, setAddAdminEmails] = useState<Record<string, string>>({});
     
     const fetchMarketCenters = useCallback(async () => {
         setLoading(true);
         try {
             const mcs = await getMarketCenters();
             setMarketCenters(mcs);
-            const allAdminIds = [...new Set(mcs.flatMap(mc => mc.adminIds))];
-            if (allAdminIds.length > 0) {
-                const adminUsers = await getUsersByIds(allAdminIds);
-                const adminUserLookup = new Map(adminUsers.map(user => [user.id, user]));
-                const newAdminsMap = mcs.reduce((acc, mc) => {
-                    acc[mc.id] = mc.adminIds.map(adminId => adminUserLookup.get(adminId)).filter((user): user is TeamMember => !!user);
-                    return acc;
-                }, {} as Record<string, TeamMember[]>);
-                setAdminsMap(newAdminsMap);
-            } else {
-                setAdminsMap({});
-            }
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
-    }, [getMarketCenters, getUsersByIds]);
+    }, [getMarketCenters]);
     
     useEffect(() => { fetchMarketCenters(); }, [fetchMarketCenters]);
 
@@ -861,8 +831,21 @@ const MarketCenterManagement: React.FC = () => {
         e.preventDefault();
         if (!newMcName || !newMcNumber || !newMcLocation || !newMcAgentCount) return;
         setLoading(true);
-        await createMarketCenter({ name: newMcName, marketCenterNumber: newMcNumber, location: newMcLocation, agentCount: parseInt(newMcAgentCount, 10) || 0 });
+        await createMarketCenter({ 
+            name: newMcName, 
+            marketCenterNumber: newMcNumber, 
+            location: newMcLocation, 
+            agentCount: parseInt(newMcAgentCount, 10) || 0,
+            branding: {
+                colors: { primary: '#B40101', secondary: '#333333' },
+                typography: { headingFont: 'Poppins', bodyFont: 'Roboto' }
+            }
+        });
         setIsCreateModalOpen(false);
+        setNewMcName('');
+        setNewMcNumber('');
+        setNewMcLocation('');
+        setNewMcAgentCount('');
         fetchMarketCenters();
     };
 
@@ -874,7 +857,7 @@ const MarketCenterManagement: React.FC = () => {
         }
     };
     
-    if (loading) return <Spinner />;
+    if (loading) return <div className="flex justify-center p-12"><Spinner /></div>;
 
     return (
         <div className="space-y-4 mt-6 pt-6 border-t border-border">
@@ -882,12 +865,42 @@ const MarketCenterManagement: React.FC = () => {
                 <h2 className="text-2xl font-bold flex items-center gap-3"><Building/> Market Center Management (Global)</h2>
                 <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 text-sm bg-primary/10 text-primary font-semibold py-1.5 px-3 rounded-lg hover:bg-primary/20"><Plus size={16}/> Create MC</button>
             </div>
+
+            {isCreateModalOpen && (
+                <Card className="p-6 border-primary/30 bg-primary/5">
+                    <form onSubmit={handleCreate} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">MC Name</label>
+                                <input type="text" value={newMcName} onChange={e => setNewMcName(e.target.value)} className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary" placeholder="e.g. KW Central" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">MC Number</label>
+                                <input type="text" value={newMcNumber} onChange={e => setNewMcNumber(e.target.value)} className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary" placeholder="e.g. 123" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">Location</label>
+                                <input type="text" value={newMcLocation} onChange={e => setNewMcLocation(e.target.value)} className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary" placeholder="e.g. Austin, TX" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">Agent Count</label>
+                                <input type="number" value={newMcAgentCount} onChange={e => setNewMcAgentCount(e.target.value)} className="w-full bg-input border border-border rounded-md px-3 py-2 text-text-primary" placeholder="e.g. 150" required />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-sm font-bold text-text-secondary hover:text-text-primary">Cancel</button>
+                            <button type="submit" className="px-4 py-2 bg-primary text-on-accent rounded-lg font-bold text-sm">Create Market Center</button>
+                        </div>
+                    </form>
+                </Card>
+            )}
+
             {marketCenters.map(mc => (
                 <Card key={mc.id} className="bg-background/50">
                     <div className="flex justify-between items-start">
                         <div>
                             <h4 className="text-lg font-bold">{mc.name}</h4>
-                            <p className="text-sm text-text-secondary">MC #{mc.marketCenterNumber} &bull; {mc.location}</p>
+                            <p className="text-sm text-text-secondary">MC #{mc.marketCenterNumber} &bull; {mc.location} &bull; {mc.agentCount} Agents</p>
                         </div>
                         <button onClick={() => handleDelete(mc.id)} className="p-1.5 text-destructive hover:bg-destructive/10 rounded-full"><Trash2 size={16}/></button>
                     </div>

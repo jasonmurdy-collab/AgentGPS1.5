@@ -81,7 +81,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     batch.set(newTransactionRef, dataToSave);
 
-    const gci = newTransaction.salePrice * (newTransaction.commissionRate / 100);
+    const gci = newTransaction.totalCommission !== undefined ? newTransaction.totalCommission : newTransaction.salePrice * (newTransaction.commissionRate / 100);
     const listingIncrement = newTransaction.type === 'Listing Sale' ? 1 : 0;
     
     const userMetricsUpdate: { [key: string]: any } = {};
@@ -117,14 +117,15 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     let listingsDiff = 0;
 
     if (originalTransaction) {
-        const originalGci = originalTransaction.salePrice * (originalTransaction.commissionRate / 100);
+        const originalGci = originalTransaction.totalCommission !== undefined ? originalTransaction.totalCommission : originalTransaction.salePrice * (originalTransaction.commissionRate / 100);
         const originalListings = originalTransaction.type === 'Listing Sale' ? 1 : 0;
 
         const newSalePrice = updates.salePrice !== undefined ? updates.salePrice : originalTransaction.salePrice;
         const newCommissionRate = updates.commissionRate !== undefined ? updates.commissionRate : originalTransaction.commissionRate;
+        const newTotalCommission = updates.totalCommission !== undefined ? updates.totalCommission : originalTransaction.totalCommission;
         const newType = updates.type !== undefined ? updates.type : originalTransaction.type;
         
-        const newGci = newSalePrice * (newCommissionRate / 100);
+        const newGci = newTotalCommission !== undefined ? newTotalCommission : newSalePrice * (newCommissionRate / 100);
         const newListings = newType === 'Listing Sale' ? 1 : 0;
 
         gciDiff = newGci - originalGci;
@@ -169,7 +170,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const transactionToDelete = transactions.find(t => t.id === transactionId);
     if (transactionToDelete) {
-        const gci = transactionToDelete.salePrice * (transactionToDelete.commissionRate / 100);
+        const gci = transactionToDelete.totalCommission !== undefined ? transactionToDelete.totalCommission : transactionToDelete.salePrice * (transactionToDelete.commissionRate / 100);
         const listingDecrement = transactionToDelete.type === 'Listing Sale' ? 1 : 0;
         
         const userMetricsUpdate: { [key: string]: any } = {};

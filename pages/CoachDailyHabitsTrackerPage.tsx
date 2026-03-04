@@ -136,32 +136,34 @@ const PrintableAllLogs: React.FC<{ logs: DailyTrackerData[]; settings: HabitTrac
 
 // Reusable components
 const MetricStepper: React.FC<{ label: string; value: number; onUpdate: (newValue: number) => void; unit: string; points: number; }> = ({ label, value, onUpdate, unit, points }) => (
-    <div className="bg-background/50 p-3 rounded-lg flex items-center justify-between">
-        <div className="flex-1 pr-2">
-            <p className="font-bold text-text-primary truncate">{label}</p>
-            <p className="text-xs text-text-secondary">{points} {points === 1 ? 'pt' : 'pts'} / {unit}</p>
+    <div className="bg-background/50 p-3 rounded-xl flex items-center justify-between border border-border/30">
+        <div className="flex-1 min-w-0 pr-2">
+            <p className="font-bold text-text-primary truncate leading-tight text-sm sm:text-base">{label}</p>
+            <p className="text-[9px] uppercase tracking-wider font-bold text-text-secondary mt-0.5">{points} {points === 1 ? 'pt' : 'pts'} / {unit}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
             <button 
                 onClick={() => onUpdate(Math.max(0, value - 1))} 
-                className="w-8 h-8 flex items-center justify-center bg-primary/10 text-primary rounded-full transition-colors hover:bg-primary/20 disabled:opacity-50"
+                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-primary/10 text-primary rounded-lg transition-all hover:bg-primary/20 active:scale-95 disabled:opacity-50"
                 aria-label={`Decrease ${label}`}
             >
-                <Minus size={16}/>
+                <Minus size={16} strokeWidth={3} />
             </button>
-            <input 
-                type="number" 
-                value={value} 
-                onChange={e => onUpdate(parseInt(e.target.value, 10) || 0)} 
-                className="w-16 text-center font-bold text-2xl bg-transparent border-b-2 border-border focus:border-primary focus:outline-none transition-colors"
-                aria-label={label}
-            />
+            <div className="relative">
+                <input 
+                    type="number" 
+                    value={value} 
+                    onChange={e => onUpdate(parseInt(e.target.value, 10) || 0)} 
+                    className="w-10 sm:w-12 text-center font-black text-xl sm:text-2xl bg-transparent border-b-2 border-border focus:border-primary focus:outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    aria-label={label}
+                />
+            </div>
             <button 
                 onClick={() => onUpdate(value + 1)} 
-                className="w-8 h-8 flex items-center justify-center bg-primary/10 text-primary rounded-full transition-colors hover:bg-primary/20"
+                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-primary text-on-accent rounded-lg shadow-lg shadow-primary/20 transition-all hover:brightness-110 active:scale-95"
                 aria-label={`Increase ${label}`}
             >
-                <Plus size={16}/>
+                <Plus size={16} strokeWidth={3} />
             </button>
         </div>
     </div>
@@ -171,7 +173,7 @@ const MetricStepper: React.FC<{ label: string; value: number; onUpdate: (newValu
 const DailyMetricsSection: React.FC<{ data: DailyTrackerData; settings: HabitActivitySetting[]; onUpdate: (path: string, value: any) => void; }> = ({ data, settings, onUpdate }) => (
     <Card>
         <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><Target/> Daily Coach Metrics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {settings.map(activity => (
                  <MetricStepper 
                     key={activity.id}

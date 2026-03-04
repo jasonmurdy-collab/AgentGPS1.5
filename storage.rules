@@ -1,0 +1,59 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // --- Helper Functions ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isSuperAdmin() {
+      return isSignedIn() && getUserData().isSuperAdmin == true;
+    }
+    
+    function isMcAdmin(mcId) {
+      let user = getUserData();
+      return isSuperAdmin() || (user.role == 'market_center_admin' && user.marketCenterId == mcId);
+    }
+
+    // --- Storage Rules ---
+
+    // Market Center Logos (Public Read, Admin Write)
+    match /mc_logos/{mcId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isMcAdmin(mcId);
+    }
+
+    // User Submissions / LMS Files
+    match /user_submissions/{userId}/{allPaths=**} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isMcAdmin(getUserData().marketCenterId) ||
+        isSuperAdmin()
+      );
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Announcement Media
+    match /announcement_media/{mcId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isMcAdmin(mcId);
+    }
+
+    // User Profile Pictures
+    match /profile_pictures/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Default fallback
+    match /{allPaths=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

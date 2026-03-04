@@ -1,8 +1,9 @@
 // jasonmurdy-collab/agentgps1.5/AgentGPS1.5-3cc8bec42c6fef15bc67aa794c6ec3f25b92b15f/firebaseConfig.ts
 
-import { initializeApp, getApps, FirebaseApp, deleteApp } from 'firebase/app';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from './config';
 
 let app: FirebaseApp | undefined;
@@ -57,4 +58,11 @@ export const getFirestoreInstance = (): Firestore | null => {
   const firebaseApp = getApp();
   if (!firebaseApp) return null;
   return getFirestore(firebaseApp);
+};
+
+// Getter for Storage instance
+export const getStorageInstance = (): FirebaseStorage | null => {
+  const firebaseApp = getApp();
+  if (!firebaseApp) return null;
+  return getStorage(firebaseApp);
 };
