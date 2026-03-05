@@ -135,21 +135,32 @@ const CreatePlaybookModal: React.FC<{
 const NewAgentResourcesCard: React.FC<{
     agent: { id: string, name: string, isNewAgent?: boolean, assignedLearningPathId?: string, onboardingChecklistProgress?: string[] };
     learningPaths: LearningPath[];
+    playbooks: Playbook[];
     onToggleNewAgentStatus: (agentId: string, currentStatus: boolean) => Promise<void>;
     onAssignLearningPath: (agentId: string, pathId: string | null) => Promise<void>;
+    onAssignPlaybook: (agentId: string, playbookId: string | null) => Promise<void>;
     onGenerateGoalSuggestions: (agentId: string) => Promise<void>;
-}> = ({ agent, learningPaths, onToggleNewAgentStatus, onAssignLearningPath, onGenerateGoalSuggestions }) => {
+}> = ({ agent, learningPaths, playbooks, onToggleNewAgentStatus, onAssignLearningPath, onAssignPlaybook, onGenerateGoalSuggestions }) => {
     const [assignPathId, setAssignPathId] = useState<string>(agent.assignedLearningPathId || '');
+    const [assignPlaybookId, setAssignPlaybookId] = useState<string>(agent.assignedPlaybookId || '');
     const [savingPath, setSavingPath] = useState(false);
+    const [savingPlaybook, setSavingPlaybook] = useState(false);
 
     useEffect(() => {
         setTimeout(() => setAssignPathId(agent.assignedLearningPathId || ''), 0);
-    }, [agent.assignedLearningPathId]);
+        setTimeout(() => setAssignPlaybookId(agent.assignedPlaybookId || ''), 0);
+    }, [agent.assignedLearningPathId, agent.assignedPlaybookId]);
 
     const handleSavePath = async () => {
         setSavingPath(true);
         await onAssignLearningPath(agent.id, assignPathId === '' ? null : assignPathId);
         setSavingPath(false);
+    };
+
+    const handleSavePlaybook = async () => {
+        setSavingPlaybook(true);
+        await onAssignPlaybook(agent.id, assignPlaybookId === '' ? null : assignPlaybookId);
+        setSavingPlaybook(false);
     };
 
     return (
@@ -162,7 +173,7 @@ const NewAgentResourcesCard: React.FC<{
                         role="switch"
                         id={`toggle-new-agent-${agent.id}`}
                         aria-checked={!!agent.isNewAgent}
-                        onClick={() => onToggleNewAgentStatus(agent.id, !!agent.isNewAgent)}
+                        onClick={() => onToggleNewAgentStatus(agent.id, !agent.isNewAgent)}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${agent.isNewAgent ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
                     >
                         <span
@@ -191,6 +202,23 @@ const NewAgentResourcesCard: React.FC<{
                             <button onClick={handleSavePath} disabled={savingPath || assignPathId === (agent.assignedLearningPathId || '')} className="p-2 bg-primary text-on-accent rounded-md">{savingPath ? <Spinner className="w-5 h-5"/> : <CheckSquare size={20}/>}</button>
                         </div>
                     </div>
+                    <div>
+                        <label htmlFor={`assign-playbook-${agent.id}`} className="block text-sm font-medium text-text-secondary mb-1">Assign Playbook</label>
+                        <div className="flex gap-2">
+                            <select
+                                id={`assign-playbook-${agent.id}`}
+                                value={assignPlaybookId}
+                                onChange={e => setAssignPlaybookId(e.target.value)}
+                                className="flex-1 bg-input border border-border rounded-md p-2"
+                            >
+                                <option value="">-- No Playbook Assigned --</option>
+                                {playbooks.map(pb => (
+                                    <option key={pb.id} value={pb.id}>{pb.title}</option>
+                                ))}
+                            </select>
+                            <button onClick={handleSavePlaybook} disabled={savingPlaybook || assignPlaybookId === (agent.assignedPlaybookId || '')} className="p-2 bg-primary text-on-accent rounded-md">{savingPlaybook ? <Spinner className="w-5 h-5"/> : <CheckSquare size={20}/>}</button>
+                        </div>
+                    </div>
                      <div>
                         <button onClick={() => onGenerateGoalSuggestions(agent.id)} className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-border rounded-lg text-sm text-text-secondary hover:border-primary hover:text-primary">
                             <Target size={16}/> Generate Goal Suggestion
@@ -208,7 +236,7 @@ const ResourceManagementPage: React.FC = () => {
     const { user, userData, getUserById, updateUserNewAgentStatus, getUsersByIds } = useAuth();
     const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
     const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
-    const [managedAgents, setManagedAgents] = useState<({ id: string, name: string, isNewAgent?: boolean, assignedLearningPathId?: string, onboardingChecklistProgress?: string[] })[]>([]);
+    const [managedAgents, setManagedAgents] = useState<({ id: string, name: string, isNewAgent?: boolean, assignedLearningPathId?: string, assignedPlaybookId?: string, onboardingChecklistProgress?: string[] })[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreatePlaybookModalOpen, setIsCreatePlaybookModalOpen] = useState(false);
     const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -366,6 +394,12 @@ const ResourceManagementPage: React.FC = () => {
         setManagedAgents(prev => prev.map(a => a.id === agentId ? { ...a, assignedLearningPathId: pathId || undefined } : a));
     };
 
+    const handleAssignPlaybook = async (agentId: string, playbookId: string | null) => {
+        if (!user || !userData) return;
+        await setDoc(doc(getFirestoreInstance(), 'users', agentId), { assignedPlaybookId: playbookId }, { merge: true });
+        setManagedAgents(prev => prev.map(a => a.id === agentId ? { ...a, assignedPlaybookId: playbookId || undefined } : a));
+    };
+
     const handleToggleNewAgentStatus = async (agentId: string, currentStatus: boolean) => {
         await updateUserNewAgentStatus(agentId, currentStatus);
         setManagedAgents(prev => prev.map(a => a.id === agentId ? { ...a, isNewAgent: currentStatus } : a));
@@ -488,7 +522,9 @@ const ResourceManagementPage: React.FC = () => {
                                         key={agent.id}
                                         agent={agent}
                                         learningPaths={learningPaths}
+                                        playbooks={playbooks}
                                         onAssignLearningPath={handleAssignLearningPath}
+                                        onAssignPlaybook={handleAssignPlaybook}
                                         onToggleNewAgentStatus={handleToggleNewAgentStatus}
                                         onGenerateGoalSuggestions={handleGenerateGoalSuggestions}
                                     />

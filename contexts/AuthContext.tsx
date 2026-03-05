@@ -33,7 +33,7 @@ import {
     deleteDoc
 } from 'firebase/firestore';
 import { processDailyTrackerDoc, processTransactionDoc, processCommissionProfileDoc, processUserDoc, processTeamDoc, processPerformanceLogDoc, processPlaybookDoc, processClientLeadDoc, processClientLeadActivityDoc, processTodoItemDoc } from '../lib/firestoreUtils';
-import type { Team, TeamMember, NewAgentResources, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, MarketCenter, MarketCenterBranding, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem } from '../types';
+import type { Team, TeamMember, NewAgentResources, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, MarketCenter, MarketCenterBranding, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem, DashboardWidgetConfig } from '../types';
 
 export const P = {
   isSuperAdmin: (user: TeamMember | null): boolean => !!user?.isSuperAdmin,
@@ -143,7 +143,7 @@ interface AuthContextType {
   getUndatedTodosForUser: () => Promise<TodoItem[]>;
   getLinkableContacts: () => Promise<{ leads: ClientLead[], candidates: Candidate[] }>;
   sendSms: (to: string, body: string) => Promise<{ success: boolean; error?: string }>;
-  updateDashboardLayout: (layout: string[]) => Promise<void>;
+  updateDashboardLayout: (layout: DashboardWidgetConfig[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -987,7 +987,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [userData]);
 
-    const updateDashboardLayout = useCallback(async (layout: string[]) => {
+    const updateDashboardLayout = useCallback(async (layout: DashboardWidgetConfig[]) => {
         const db = getFirestoreInstance();
         if (!user || !db) return;
         await updateDoc(doc(db, 'users', user.uid), { dashboardLayout: layout });

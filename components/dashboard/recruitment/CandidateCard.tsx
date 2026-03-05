@@ -1,4 +1,4 @@
-import React, { FC, DragEvent, useCallback } from 'react';
+import React, { FC } from 'react';
 import type { Candidate, TeamMember } from '../../../types';
 import { Mail, Phone } from 'lucide-react';
 
@@ -20,35 +20,58 @@ function timeAgo(dateString: string) {
 export const CandidateCard: FC<{
     candidate: Candidate;
     owner: TeamMember | undefined;
-    canDrag: boolean;
     onClick: () => void;
-    onDragStart: (e: DragEvent<HTMLDivElement>, id: string) => void;
-}> = React.memo(({ candidate, owner, canDrag, onClick, onDragStart }) => {
+}> = React.memo(({ candidate, owner, onClick }) => {
     const ownerInitials = owner?.name.split(' ').map(n => n[0]).join('') || '?';
     
-    const handleDragStartCallback = useCallback((e: DragEvent<HTMLDivElement>) => {
-        if (canDrag) {
-            onDragStart(e, candidate.id);
-        }
-    }, [canDrag, onDragStart, candidate.id]);
-
     return (
         <div
-            draggable={canDrag}
-            onDragStart={handleDragStartCallback}
             onClick={onClick}
-            className={`p-3 mb-3 bg-surface border border-border rounded-lg shadow-sm ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} hover:border-primary hover:bg-primary/5 transition-all`}
+            className="p-4 bg-surface border border-border rounded-2xl shadow-sm hover:shadow-md hover:border-primary/50 hover:bg-primary/[0.02] transition-all cursor-pointer group"
             aria-label={`Candidate: ${candidate.name}, stage: ${candidate.stage}`}
         >
-            <div className="flex justify-between items-start">
-                <p className="font-bold text-text-primary pr-2">{candidate.name}</p>
-                <div className="w-6 h-6 rounded-full bg-accent flex-shrink-0 flex items-center justify-center text-on-accent font-bold text-xs" title={`Owner: ${owner?.name}`}>{ownerInitials}</div>
+            <div className="flex justify-between items-start mb-3">
+                <div>
+                    <p className="font-bold text-text-primary text-lg leading-tight group-hover:text-primary transition-colors">{candidate.name}</p>
+                    {candidate.currentBrokerage && (
+                        <span className="inline-block mt-1 text-[10px] uppercase tracking-wider font-bold text-text-secondary bg-background px-2 py-0.5 rounded-full">
+                            {candidate.currentBrokerage}
+                        </span>
+                    )}
+                </div>
+                {owner && (
+                    <div 
+                        className="w-8 h-8 rounded-full bg-primary/10 text-primary flex-shrink-0 flex items-center justify-center font-bold text-xs border border-primary/20" 
+                        title={`Owner: ${owner.name}`}
+                    >
+                        {ownerInitials}
+                    </div>
+                )}
             </div>
-            <div className="flex items-center gap-4 mt-2 text-xs text-text-secondary">
-                <a href={`mailto:${candidate.email}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 hover:text-primary"><Mail size={14} /> Email</a>
-                {candidate.phone && <a href={`tel:${candidate.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 hover:text-primary"><Phone size={14} /> Call</a>}
+
+            <div className="flex items-center gap-4 text-xs text-text-secondary">
+                <a 
+                    href={`mailto:${candidate.email}`} 
+                    onClick={e => e.stopPropagation()} 
+                    className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                >
+                    <Mail size={14} /> Email
+                </a>
+                {candidate.phone && (
+                    <a 
+                        href={`tel:${candidate.phone}`} 
+                        onClick={e => e.stopPropagation()} 
+                        className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                    >
+                        <Phone size={14} /> Call
+                    </a>
+                )}
             </div>
-            <p className="text-xs text-text-secondary mt-3 text-right">Last contacted: {timeAgo(candidate.lastContacted)}</p>
+
+            <div className="mt-4 pt-3 border-t border-border/50 flex justify-between items-center">
+                <span className="text-[10px] text-text-secondary uppercase font-medium tracking-tight">Last Contact</span>
+                <span className="text-xs font-semibold text-text-primary">{timeAgo(candidate.lastContacted)}</span>
+            </div>
         </div>
     );
 });

@@ -7,6 +7,7 @@ import { Spinner } from './components/ui/Spinner';
 import { TransactionsProvider } from './contexts/TransactionsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { CURATED_PALETTES } from './constants/branding';
+import { Toaster } from 'sonner';
 
 // Import layout components
 import { MainLayout } from './layouts/MainLayout';
@@ -241,6 +242,7 @@ const App: React.FC = () => {
                 <GoalProvider>
                     <TransactionsProvider>
                         <NotificationProvider>
+                            <Toaster position="top-right" richColors closeButton />
                             <AppRoutes />
                         </NotificationProvider>
                     </TransactionsProvider>

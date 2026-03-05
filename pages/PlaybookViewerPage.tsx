@@ -364,7 +364,15 @@ const PlaybookViewerPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+    const [isMobileListVisible, setIsMobileListVisible] = useState(true);
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+    
+    const handleLessonSelect = (lesson: Lesson | null) => {
+        setActiveLesson(lesson);
+        if (lesson && window.innerWidth < 768) {
+            setIsMobileListVisible(false);
+        }
+    };
     const [submissionText, setSubmissionText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     
@@ -411,7 +419,7 @@ const PlaybookViewerPage: React.FC = () => {
                     setPlaybook(pb);
 
                     const firstUncompleted = pb.modules.flatMap(m => m.lessons).find(l => !userData?.playbookProgress?.[playbookId]?.includes(l.id));
-                    setActiveLesson(firstUncompleted || pb.modules?.[0]?.lessons?.[0] || null);
+                    handleLessonSelect(firstUncompleted || pb.modules?.[0]?.lessons?.[0] || null);
                     
                     const initialExpanded: Record<string, boolean> = {};
                     pb.modules.forEach(m => initialExpanded[m.id] = true);
@@ -560,12 +568,12 @@ const PlaybookViewerPage: React.FC = () => {
         <div className="h-full flex flex-col">
             <header className="p-4 sm:p-6 lg:p-8">
                 <Link to="/resource-library" className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline mb-4"><ArrowLeft size={16}/> Back to My Growth</Link>
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary">{playbook.title}</h1>
-                <p className="text-lg text-text-secondary mt-1">{playbook.description}</p>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-text-primary">{playbook.title}</h1>
+                <p className="text-sm text-text-secondary mt-1">{playbook.description}</p>
             </header>
             
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden px-4 sm:px-6 lg:px-8 pb-8 gap-6">
-                <nav className="w-full md:w-1/3 lg:w-1/4 bg-surface rounded-2xl p-4 flex flex-col overflow-y-auto">
+                <nav className={`${isMobileListVisible ? 'block' : 'hidden'} md:block w-full md:w-1/3 lg:w-1/4 bg-surface rounded-2xl p-4 flex flex-col overflow-y-auto`}>
                     <h2 className="text-lg font-bold mb-3 flex-shrink-0">Contents</h2>
                     <div className="flex-grow overflow-y-auto pr-2 space-y-4">
                         {playbook.modules.map(module => (
@@ -580,7 +588,7 @@ const PlaybookViewerPage: React.FC = () => {
                                             const Icon = LessonIcon[lesson.type];
                                             const isCompleted = completedLessons.includes(lesson.id);
                                             return (
-                                                <button key={lesson.id} onClick={() => setActiveLesson(lesson)} className={`w-full text-left flex items-center gap-2 p-2 rounded-md text-sm transition-colors ${activeLesson?.id === lesson.id ? 'bg-primary/10 text-primary' : 'hover:bg-primary/5'}`}>
+                                                <button key={lesson.id} onClick={() => handleLessonSelect(lesson)} className={`w-full text-left flex items-center gap-2 p-2 rounded-md text-sm transition-colors ${activeLesson?.id === lesson.id ? 'bg-primary/10 text-primary' : 'hover:bg-primary/5'}`}>
                                                     {isCompleted ? <CheckCircle size={14} className="text-success flex-shrink-0" /> : <Icon size={14} className="text-text-secondary flex-shrink-0" />}
                                                     <span className={`truncate ${isCompleted ? 'text-text-secondary' : ''}`}>{lesson.title}</span>
                                                 </button>
@@ -593,19 +601,22 @@ const PlaybookViewerPage: React.FC = () => {
                     </div>
                 </nav>
 
-                <main className="w-full md:w-2/3 lg:w-3/4 bg-surface rounded-2xl flex flex-col overflow-hidden">
+                <main className={`${isMobileListVisible ? 'hidden' : 'block'} md:block w-full md:w-2/3 lg:w-3/4 bg-surface rounded-2xl flex flex-col overflow-hidden`}>
                     {activeLesson ? (
                         <>
                             <div className="p-6 flex-grow overflow-y-auto">
-                                <h2 className="text-3xl font-bold mb-6">{activeLesson.title}</h2>
+                                <button onClick={() => setIsMobileListVisible(true)} className="md:hidden flex items-center gap-2 text-sm font-semibold text-primary hover:underline mb-4">
+                                    <ArrowLeft size={16}/> Back to Contents
+                                </button>
+                                <h2 className="text-2xl font-bold mb-4">{activeLesson.title}</h2>
                                 {renderLessonContent(activeLesson)}
                             </div>
                             <div className="flex justify-between items-center p-4 border-t border-border flex-shrink-0">
-                                <button onClick={() => setActiveLesson(prevLesson)} disabled={!prevLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
+                                <button onClick={() => handleLessonSelect(prevLesson)} disabled={!prevLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
                                    <ArrowLeftIcon size={16}/> Previous
                                 </button>
                                 <span className="text-sm text-text-secondary">{currentIndex + 1} / {totalLessons}</span>
-                                <button onClick={() => setActiveLesson(nextLesson)} disabled={!nextLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
+                                <button onClick={() => handleLessonSelect(nextLesson)} disabled={!nextLesson} className="flex items-center gap-2 py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/5 transition-colors">
                                    Next <ArrowRight size={16}/>
                                 </button>
                             </div>

@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useCallback, DragEvent, FC, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, FC, useEffect } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
-import { UserSearch, PlusCircle, Mail, Phone, X, Trash2, Edit, Send, Briefcase, User, PhoneCall, Mail as MailIcon, DollarSign, ClipboardList, MessageSquare } from 'lucide-react';
+import { PlusCircle, X, Trash2, Edit, Send, Briefcase, User, PhoneCall, Mail as MailIcon, DollarSign, ClipboardList, MessageSquare, Search, Filter } from 'lucide-react';
 import type { Candidate, PipelineStage, CandidateActivity, TeamMember } from '../types';
 import { PIPELINE_STAGES } from '../types';
 import { createPortal } from 'react-dom';
@@ -10,6 +10,8 @@ import { Spinner } from '../components/ui/Spinner';
 import { CandidateCard } from '../components/dashboard/recruitment/CandidateCard';
 import { RecruitmentStats } from '../components/dashboard/recruitment/RecruitmentStats';
 import { Link } from 'react-router-dom';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { toast } from 'sonner';
 
 // --- UTILITY FUNCTIONS ---
 function timeAgo(dateString: string) {
@@ -32,11 +34,10 @@ function timeAgo(dateString: string) {
 const SMSModal: FC<{ 
     isOpen: boolean; 
     onClose: () => void; 
-    recipientName: string;
     recipientPhone: string;
     onSend: (message: string) => Promise<void>;
     isConfigured: boolean;
-}> = ({ isOpen, onClose, recipientName, recipientPhone, onSend, isConfigured }) => {
+}> = ({ isOpen, onClose, recipientPhone, onSend, isConfigured }) => {
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
 
@@ -50,6 +51,7 @@ const SMSModal: FC<{
             onClose();
             setMessage('');
         } catch (e) {
+            console.error('Failed to send message:', e);
             alert('Failed to send message. Please check your Twilio settings.');
         } finally {
             setSending(false);
@@ -394,11 +396,11 @@ const RecruitmentHubPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-    const [draggedOverColumn, setDraggedOverColumn] = useState<PipelineStage | null>(null);
     const [recruiterFilter, setRecruiterFilter] = useState('all');
-
+    const [searchQuery, setSearchQuery] = useState('');
     const canManageRecruits = P.isCoach(userData) || P.isRecruiter(userData);
     const isAdmin = P.isMcAdmin(userData);
+    const [view, setView] = useState<'team' | 'personal'>(isAdmin || P.isCoach(userData) ? 'team' : 'personal');
     const recruitersInMc = useMemo(() => {
         return allMcUsers.filter(u => u.role === 'recruiter' || P.isCoach(u) || P.isSuperAdmin(u));
     }, [allMcUsers]);
@@ -410,12 +412,12 @@ const RecruitmentHubPage: React.FC = () => {
         let finalUsers: TeamMember[] = [];
     
         try {
-            if ((P.isMcAdmin(userData) || P.isCoach(userData)) && userData.marketCenterId) {
+            if ((P.isMcAdmin(userData) || P.isCoach(userData)) && userData.marketCenterId && view === 'team') {
                 [finalCandidates, finalUsers] = await Promise.all([
                     getCandidatesForMarketCenter(userData.marketCenterId),
                     getUsersForMarketCenter(userData.marketCenterId),
                 ]);
-            } else if (P.isRecruiter(userData)) { 
+            } else { 
                 finalCandidates = await getCandidatesForRecruiter(user.uid);
                 if (userData.marketCenterId) {
                     try {
@@ -427,18 +429,16 @@ const RecruitmentHubPage: React.FC = () => {
                 } else {
                     finalUsers = [userData];
                 }
-            } else {
-                finalCandidates = [];
-                finalUsers = [userData];
             }
             setCandidates(finalCandidates);
             setAllMcUsers(finalUsers);
         } catch (error) { 
             console.error("Failed to fetch recruitment data:", error); 
+            toast.error("Failed to load recruitment data");
         } finally { 
             setLoading(false); 
         }
-    }, [user, userData, getCandidatesForMarketCenter, getCandidatesForRecruiter, getUsersForMarketCenter]);
+    }, [user, userData, view, getCandidatesForMarketCenter, getCandidatesForRecruiter, getUsersForMarketCenter]);
 
     useEffect(() => {
         fetchData();
@@ -447,9 +447,20 @@ const RecruitmentHubPage: React.FC = () => {
     const usersMap = useMemo(() => new Map(allMcUsers.map(u => [u.id, u])), [allMcUsers]);
 
     const filteredCandidates = useMemo(() => {
-        if (!isAdmin || recruiterFilter === 'all') return candidates;
-        return candidates.filter(c => c.recruiterId === recruiterFilter);
-    }, [candidates, recruiterFilter, isAdmin]);
+        let result = candidates;
+        if (isAdmin && recruiterFilter !== 'all' && view === 'team') {
+            result = result.filter(c => c.recruiterId === recruiterFilter);
+        }
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            result = result.filter(c => 
+                c.name.toLowerCase().includes(query) || 
+                c.email.toLowerCase().includes(query) ||
+                c.currentBrokerage?.toLowerCase().includes(query)
+            );
+        }
+        return result;
+    }, [candidates, recruiterFilter, isAdmin, view, searchQuery]);
 
     const candidatesByStage = useMemo(() => {
         return PIPELINE_STAGES.reduce((acc, stage) => {
@@ -458,41 +469,72 @@ const RecruitmentHubPage: React.FC = () => {
         }, {} as Record<PipelineStage, Candidate[]>);
     }, [filteredCandidates]);
 
-    const handleDragStart = (e: DragEvent<HTMLDivElement>, id: string) => {
-        e.dataTransfer.setData("candidateId", id);
-    };
+    const onDragEnd = async (result: DropResult) => {
+        const { destination, source, draggableId } = result;
 
-    const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-    };
+        if (!destination) return;
+        if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    const handleDrop = (e: DragEvent<HTMLDivElement>, newStage: PipelineStage) => {
-        e.preventDefault();
-        const candidateId = e.dataTransfer.getData("candidateId");
+        const candidateId = draggableId;
+        const newStage = destination.droppableId as PipelineStage;
         const candidate = candidates.find(c => c.id === candidateId);
-        if (candidate && user && (canManageRecruits || candidate.recruiterId === user.uid)) {
-            handleUpdateCandidate(candidateId, { stage: newStage });
+
+        if (!candidate || !user || !(canManageRecruits || candidate.recruiterId === user.uid)) {
+            toast.error("You don't have permission to move this candidate");
+            return;
         }
-        setDraggedOverColumn(null);
+
+        // Optimistic Update
+        const previousCandidates = [...candidates];
+        setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, stage: newStage } : c));
+
+        try {
+            await updateCandidate(candidateId, { stage: newStage });
+            toast.success(`Moved to ${newStage}`);
+        } catch (error) {
+            console.error("Failed to update candidate stage:", error);
+            setCandidates(previousCandidates); // Rollback
+            toast.error("Failed to move candidate. Please try again.");
+        }
     };
     
     const handleUpdateCandidate = async (id: string, updates: Partial<Candidate>) => {
+        const previousCandidates = [...candidates];
         setCandidates(prev => prev.map(c => c.id === id ? { ...c, ...updates, lastContacted: new Date().toISOString() } : c));
         if (selectedCandidate?.id === id) {
             setSelectedCandidate(prev => prev ? { ...prev, ...updates, lastContacted: new Date().toISOString() } : null);
         }
-        await updateCandidate(id, updates);
+        try {
+            await updateCandidate(id, updates);
+            toast.success("Candidate updated");
+        } catch (err) {
+            console.error('Error updating candidate:', err);
+            setCandidates(previousCandidates);
+            toast.error("Failed to update candidate");
+        }
     };
 
     const handleAddCandidate = async (data: Omit<Candidate, 'id' | 'createdAt' | 'lastContacted'>) => {
-        await addCandidate(data);
-        fetchData(); // Refetch to get the new candidate with server timestamp
+        try {
+            await addCandidate(data);
+            toast.success("Candidate added successfully");
+            fetchData(); // Refetch to get the new candidate with server timestamp
+        } catch (err) {
+            console.error('Error adding candidate:', err);
+            toast.error("Failed to add candidate");
+        }
     };
 
     const handleDeleteCandidate = async (id: string) => {
-        await deleteCandidate(id);
-        setCandidates(prev => prev.filter(c => c.id !== id));
-        setSelectedCandidate(null);
+        try {
+            await deleteCandidate(id);
+            setCandidates(prev => prev.filter(c => c.id !== id));
+            setSelectedCandidate(null);
+            toast.success("Candidate deleted");
+        } catch (err) {
+            console.error('Error deleting candidate:', err);
+            toast.error("Failed to delete candidate");
+        }
     };
 
     return (
@@ -504,57 +546,103 @@ const RecruitmentHubPage: React.FC = () => {
                         <p className="text-lg text-text-secondary mt-1">Your collaborative command center for talent acquisition.</p>
                     </div>
                     {(userData?.role === 'recruiter' || canManageRecruits) && (
-                        <button onClick={() => setIsAddModalOpen(true)} className="flex items-center justify-center bg-primary text-on-accent font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors">
+                        <button onClick={() => setIsAddModalOpen(true)} className="flex items-center justify-center bg-primary text-on-accent font-semibold py-2 px-6 rounded-xl hover:bg-opacity-90 shadow-lg shadow-primary/20 transition-all">
                             <PlusCircle className="mr-2" size={20} /> New Candidate
                         </button>
                     )}
                 </div>
-                {isAdmin && (
-                    <div className="mt-6">
-                        <label className="text-sm font-semibold text-text-secondary mr-2">Filter by Recruiter:</label>
-                        <select value={recruiterFilter} onChange={e => setRecruiterFilter(e.target.value)} className="bg-input border border-border rounded-md px-3 py-1.5 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                            <option value="all">All Recruiters</option>
-                            {recruitersInMc.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
+                
+                <div className="mt-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        {(isAdmin || P.isCoach(userData)) && (
+                            <div className="flex items-center gap-2 p-1 bg-surface rounded-lg w-fit">
+                                <button onClick={() => setView('team')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${view === 'team' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                                    Team View
+                                </button>
+                                <button onClick={() => setView('personal')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${view === 'personal' ? 'bg-primary text-on-accent' : 'text-text-secondary hover:bg-primary/10'}`}>
+                                    My View
+                                </button>
+                            </div>
+                        )}
                     </div>
-                )}
+
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                            <input 
+                                type="text" 
+                                placeholder="Search candidates..." 
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="pl-10 pr-4 py-2 bg-surface border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none w-64"
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        {isAdmin && view === 'team' && (
+                            <div className="relative">
+                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                                <select 
+                                    value={recruiterFilter} 
+                                    onChange={e => setRecruiterFilter(e.target.value)} 
+                                    className="pl-10 pr-8 py-2 bg-surface border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer"
+                                >
+                                    <option value="all">All Recruiters</option>
+                                    {recruitersInMc.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </header>
 
             {loading ? <div className="flex h-full w-full items-center justify-center"><Spinner className="w-10 h-10"/></div> : (
                 <><div className="px-4 sm:px-6 lg:px-8"><RecruitmentStats candidates={filteredCandidates} /></div>
                 <div className="flex-1 overflow-x-auto px-4 sm:px-6 lg:px-8 pb-4">
-                    <div className="flex gap-6 h-full">
-                        {PIPELINE_STAGES.map(stage => (
-                            <div
-                                key={stage}
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, stage)}
-                                onDragEnter={() => setDraggedOverColumn(stage)}
-                                onDragLeave={() => setDraggedOverColumn(null)}
-                                className={`w-80 flex-shrink-0 bg-surface rounded-2xl p-3 flex flex-col transition-colors ${draggedOverColumn === stage ? 'bg-primary/5' : ''}`}
-                            >
-                                <h2 className="font-bold text-text-primary p-2 mb-2 flex justify-between items-center flex-shrink-0">
-                                    {stage}
-                                    <span className="text-sm font-normal bg-background px-2 py-0.5 rounded-full">{candidatesByStage[stage].length}</span>
-                                </h2>
-                                <div className="flex-grow overflow-y-auto pr-1">
-                                    {candidatesByStage[stage].map(candidate => {
-                                        const canDrag = user ? (canManageRecruits || candidate.recruiterId === user.uid) : false;
-                                        return (
-                                            <CandidateCard 
-                                                key={candidate.id} 
-                                                candidate={candidate}
-                                                owner={usersMap.get(candidate.recruiterId)}
-                                                canDrag={canDrag}
-                                                onDragStart={handleDragStart}
-                                                onClick={() => setSelectedCandidate(candidate)}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <DragDropContext onDragEnd={onDragEnd}>
+                        <div className="flex gap-6 h-full min-w-max pb-4">
+                            {PIPELINE_STAGES.map(stage => (
+                                <Droppable key={stage} droppableId={stage}>
+                                    {(provided, snapshot) => (
+                                        <div
+                                            {...provided.droppableProps}
+                                            ref={provided.innerRef}
+                                            className={`w-80 flex-shrink-0 bg-surface rounded-2xl p-3 flex flex-col transition-colors ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20' : ''}`}
+                                        >
+                                            <h2 className="font-bold text-text-primary p-2 mb-2 flex justify-between items-center flex-shrink-0">
+                                                {stage}
+                                                <span className="text-sm font-normal bg-background px-2 py-0.5 rounded-full">{candidatesByStage[stage].length}</span>
+                                            </h2>
+                                            <div className="flex-grow overflow-y-auto pr-1 space-y-3">
+                                                {candidatesByStage[stage].map((candidate, index) => (
+                                                    <Draggable key={candidate.id} draggableId={candidate.id} index={index}>
+                                                        {(provided, snapshot) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                {...provided.dragHandleProps}
+                                                                className={snapshot.isDragging ? 'z-50' : ''}
+                                                            >
+                                                                <CandidateCard 
+                                                                    candidate={candidate}
+                                                                    owner={usersMap.get(candidate.recruiterId)}
+                                                                    onClick={() => setSelectedCandidate(candidate)}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </Draggable>
+                                                ))}
+                                                {provided.placeholder}
+                                            </div>
+                                        </div>
+                                    )}
+                                </Droppable>
+                            ))}
+                        </div>
+                    </DragDropContext>
                 </div></>
             )}
             
