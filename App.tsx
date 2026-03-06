@@ -1,6 +1,7 @@
 
 import React, { Suspense, lazy, useEffect } from 'react';
 import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GoalProvider } from './contexts/GoalContext';
 import { AuthProvider, useAuth, P } from './contexts/AuthContext';
 import { Spinner } from './components/ui/Spinner';
@@ -9,9 +10,14 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { CURATED_PALETTES } from './constants/branding';
 import { Toaster } from 'sonner';
 
+// Create query client instance
+const queryClient = new QueryClient();
+
 // Import layout components
 import { MainLayout } from './layouts/MainLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
+
+// ... (rest of the file)
 
 // Lazy load pages
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -239,14 +245,16 @@ const App: React.FC = () => {
     return (
         <HashRouter>
             <AuthProvider>
-                <GoalProvider>
-                    <TransactionsProvider>
-                        <NotificationProvider>
-                            <Toaster position="top-right" richColors closeButton />
-                            <AppRoutes />
-                        </NotificationProvider>
-                    </TransactionsProvider>
-                </GoalProvider>
+                <QueryClientProvider client={queryClient}>
+                    <GoalProvider>
+                        <TransactionsProvider>
+                            <NotificationProvider>
+                                <Toaster position="top-right" richColors closeButton />
+                                <AppRoutes />
+                            </NotificationProvider>
+                        </TransactionsProvider>
+                    </GoalProvider>
+                </QueryClientProvider>
             </AuthProvider>
         </HashRouter>
     );

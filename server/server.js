@@ -15,6 +15,7 @@ const cors = require('cors');
 const { URLSearchParams, URL } = require('url');
 const rateLimit = require('express-rate-limit');
 const twilio = require('twilio');
+const { google } = require('googleapis');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -211,6 +212,93 @@ app.post('/api/send-sms', async (req, res) => {
             error: error.message || 'Failed to send SMS via Twilio API' 
         });
     }
+});
+
+app.post('/api/calendar/create-event', async (req, res) => {
+    const { accessToken, title, description, startTime, endTime, clientEmail } = req.body;
+    
+    if (!accessToken || !title || !startTime || !endTime) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        
+        const calendar = google.calendar({ version: 'v3', auth });
+        
+        const event = {
+            summary: title,
+            description: description,
+            start: { dateTime: startTime },
+            end: { dateTime: endTime },
+            conferenceData: {
+                createRequest: {
+                    requestId: Math.random().toString(36).substring(7),
+                    conferenceSolutionKey: { type: 'hangoutsMeet' }
+                }
+            },
+            attendees: clientEmail ? [{ email: clientEmail }] : []
+        };
+        
+        const response = await calendar.events.insert({
+            calendarId: 'primary',
+            resource: event,
+            conferenceDataVersion: 1
+        });
+        
+        res.json({ hangoutLink: response.data.hangoutLink });
+    } catch (error) {
+        console.error('Calendar error:', error);
+        res.status(500).json({ error: 'Failed to create event' });
+    }
+});
+
+app.post('/api/calendar/list-events', async (req, res) => {
+    const { accessToken, timeMin, timeMax } = req.body;
+    
+    if (!accessToken) {
+        return res.status(400).json({ error: 'Missing accessToken' });
+    }
+
+    try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        
+        const calendar = google.calendar({ version: 'v3', auth });
+        
+        const response = await calendar.events.list({
+            calendarId: 'primary',
+            timeMin: timeMin || new Date().toISOString(),
+            timeMax: timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+        });
+        
+        res.json({ events: response.data.items });
+    } catch (error) {
+        console.error('Calendar list error:', error);
+        res.status(500).json({ error: 'Failed to list events' });
+    }
+});
+
+app.get('/api/auth/google-calendar-url', (req, res) => {
+    console.log("APP_URL:", process.env.APP_URL);
+    const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        `${process.env.APP_URL}/auth/callback`
+    );
+
+    const scopes = ['https://www.googleapis.com/auth/calendar.events.readonly'];
+
+    const url = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        redirect_uri: `${process.env.APP_URL}/auth/callback`
+    });
+
+    res.json({ url });
 });
 
 const webSocketInterceptorScriptTag = `<script src="/public/websocket-interceptor.js" defer></script>`;

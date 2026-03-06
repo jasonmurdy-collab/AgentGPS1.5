@@ -132,8 +132,17 @@ const CreatePlaybookModal: React.FC<{
     );
 };
 
+interface ManagedAgent {
+    id: string;
+    name: string;
+    isNewAgent?: boolean;
+    assignedLearningPathId?: string;
+    assignedPlaybookId?: string;
+    onboardingChecklistProgress?: string[];
+}
+
 const NewAgentResourcesCard: React.FC<{
-    agent: { id: string, name: string, isNewAgent?: boolean, assignedLearningPathId?: string, onboardingChecklistProgress?: string[] };
+    agent: ManagedAgent;
     learningPaths: LearningPath[];
     playbooks: Playbook[];
     onToggleNewAgentStatus: (agentId: string, currentStatus: boolean) => Promise<void>;

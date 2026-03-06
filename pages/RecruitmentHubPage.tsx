@@ -34,10 +34,11 @@ function timeAgo(dateString: string) {
 const SMSModal: FC<{ 
     isOpen: boolean; 
     onClose: () => void; 
+    recipientName: string;
     recipientPhone: string;
     onSend: (message: string) => Promise<void>;
     isConfigured: boolean;
-}> = ({ isOpen, onClose, recipientPhone, onSend, isConfigured }) => {
+}> = ({ isOpen, onClose, recipientName, recipientPhone, onSend, isConfigured }) => {
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
 
@@ -62,7 +63,7 @@ const SMSModal: FC<{
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
             <Card className="w-full max-w-md">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold flex items-center gap-2"><MessageSquare className="text-primary"/> Text Recruit</h3>
+                    <h3 className="text-xl font-bold flex items-center gap-2"><MessageSquare className="text-primary"/> Text {recipientName}</h3>
                     <button onClick={onClose} className="p-1 rounded-full hover:bg-primary/10"><X/></button>
                 </div>
                 {!isConfigured ? (

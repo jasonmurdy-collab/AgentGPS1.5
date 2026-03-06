@@ -4,7 +4,8 @@ import { Spinner } from '../ui/Spinner';
 import type { LiveSession, TeamMember } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getFirestoreInstance } from '../../firebaseConfig';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
+import axios from 'axios';
 
 interface ScheduleSessionModalProps {
   isOpen: boolean;
@@ -22,9 +23,11 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [meetingUrl, setMeetingUrl] = useState('');
+  const [linkGenerationType, setLinkGenerationType] = useState<'auto' | 'manual'>('auto');
   
   // For client-consult
   const [clientName, setClientName] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
   
   // For mc-training
   const [targetRoles, setTargetRoles] = useState<TeamMember['role'][]>([]);
@@ -37,6 +40,30 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
 
     setLoading(true);
     try {
+      let finalMeetingUrl = meetingUrl;
+
+      if (linkGenerationType === 'auto') {
+          // Fetch accessToken
+          const integrationDoc = await getDoc(doc(getFirestoreInstance(), 'userIntegrations', user.uid));
+          if (!integrationDoc.exists()) {
+              alert("Please connect your Google Calendar in Settings to use auto-generation, or select 'Use Existing Link'.");
+              setLoading(false);
+              return;
+          }
+          const { accessToken } = integrationDoc.data();
+          
+          // Call backend
+          const response = await axios.post('/api/calendar/create-event', {
+              accessToken,
+              title,
+              description,
+              startTime: new Date(`${date}T${startTime}`).toISOString(),
+              endTime: new Date(`${date}T${endTime}`).toISOString(),
+              clientEmail
+          });
+          finalMeetingUrl = response.data.hangoutLink;
+      }
+
       const sessionData: Omit<LiveSession, 'id'> = {
         title,
         description,
@@ -44,7 +71,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
         endTime: new Date(`${date}T${endTime}`).toISOString(),
         sessionType,
         platform: 'google-meet', // Defaulting for type compatibility
-        meetingUrl: meetingUrl,
+        meetingUrl: finalMeetingUrl,
         hostId: user.uid,
         hostName: userData.name,
         marketCenterId: userData.marketCenterId,
@@ -55,16 +82,9 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
           emailSent: false,
           notificationSent: true,
           sentAt: new Date().toISOString()
-        }
+        },
+        ...(sessionType === 'client-consult' ? { clientName, clientEmail } : { targetAudience: { roles: targetRoles } })
       };
-
-      if (sessionType === 'client-consult') {
-        sessionData.clientName = clientName;
-      } else {
-        sessionData.targetAudience = {
-          roles: targetRoles
-        };
-      }
 
       const db = getFirestoreInstance();
       const docRef = await addDoc(collection(db, 'liveSessions'), {
@@ -185,21 +205,41 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
           </div>
 
           <div className="border-t border-border pt-6">
-            <label className="block text-xs font-black text-text-secondary uppercase tracking-widest mb-3">Meeting Link (Zoom, Google Meet, etc.)</label>
-            <div className="relative">
-              <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-              <input
-                required
-                type="url"
-                value={meetingUrl}
-                onChange={(e) => setMeetingUrl(e.target.value)}
-                placeholder="https://zoom.us/j/..."
-                className="w-full bg-input border border-border rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
+            <label className="block text-xs font-black text-text-secondary uppercase tracking-widest mb-3">Meeting Link</label>
+            <div className="flex p-1 bg-surface-hover rounded-xl mb-4">
+              <button
+                type="button"
+                onClick={() => setLinkGenerationType('auto')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${linkGenerationType === 'auto' ? 'bg-surface text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+              >
+                Generate Google Meet Link
+              </button>
+              <button
+                type="button"
+                onClick={() => setLinkGenerationType('manual')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${linkGenerationType === 'manual' ? 'bg-surface text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+              >
+                Use Existing Link
+              </button>
             </div>
-            <p className="text-[10px] text-text-secondary mt-2 italic">
-              Paste the link for your already created event here.
-            </p>
+
+            {linkGenerationType === 'auto' ? (
+              <p className="text-sm text-text-secondary italic">
+                A Google Meet link will be generated automatically and a calendar invite will be sent to the client.
+              </p>
+            ) : (
+              <div className="relative">
+                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+                <input
+                  required={linkGenerationType === 'manual'}
+                  type="url"
+                  value={meetingUrl}
+                  onChange={(e) => setMeetingUrl(e.target.value)}
+                  placeholder="https://zoom.us/j/..."
+                  className="w-full bg-input border border-border rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                />
+              </div>
+            )}
           </div>
 
           {sessionType === 'client-consult' ? (
@@ -215,6 +255,14 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   placeholder="Client Full Name"
+                  className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                />
+                <input
+                  required={sessionType === 'client-consult'}
+                  type="email"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="Client Email Address"
                   className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 />
               </div>
