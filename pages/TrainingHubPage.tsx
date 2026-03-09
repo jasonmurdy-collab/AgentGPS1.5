@@ -17,25 +17,35 @@ const TrainingHubPage: React.FC = () => {
 
     useEffect(() => {
         const fetchLiveSessions = async () => {
-            if (!userData?.marketCenterId) {
-                setLoadingSessions(false);
-                return;
-            }
             const db = getFirestoreInstance();
-            if (!db) return;
+            if (!db || !userData) return;
             
-            const q = query(
-                collection(db, 'liveSessions'),
-                where('marketCenterId', '==', userData.marketCenterId),
-                where('sessionType', '==', 'mc-training'),
-                where('status', 'in', ['scheduled', 'live']),
-                orderBy('startTime', 'asc'),
-                limit(3)
-            );
-
             try {
+                let q;
+                if (userData.isSuperAdmin && !userData.marketCenterId) {
+                    // Super Admins without MC see all upcoming sessions
+                    q = query(
+                        collection(db, 'liveSessions'),
+                        where('status', 'in', ['scheduled', 'live']),
+                        orderBy('startTime', 'asc'),
+                        limit(10)
+                    );
+                } else if (userData.marketCenterId) {
+                    q = query(
+                        collection(db, 'liveSessions'),
+                        where('marketCenterId', '==', userData.marketCenterId),
+                        where('sessionType', '==', 'mc-training'),
+                        where('status', 'in', ['scheduled', 'live']),
+                        orderBy('startTime', 'asc'),
+                        limit(3)
+                    );
+                } else {
+                    setLoadingSessions(false);
+                    return;
+                }
+
                 const snap = await getDocs(q);
-                setLiveSessions(snap.docs.map(d => ({ id: d.id, ...d.data() } as LiveSession)));
+                setLiveSessions(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as LiveSession)));
             } catch (error) {
                 console.error("Error fetching live sessions:", error);
             } finally {

@@ -98,10 +98,9 @@ const MarketCenterHubPage: React.FC = () => {
             setLoading(true);
             setError(null); // Clear previous errors
             try {
-                const agentIds = managedAgents.map(a => a.id);
                 const [t, p, b, c] = await Promise.all([
                     getTransactionsForMarketCenter(userData.marketCenterId),
-                    getCommissionProfilesForMarketCenter(agentIds),
+                    getCommissionProfilesForMarketCenter(userData.marketCenterId),
                     getBudgetModelsForMarketCenter(userData.marketCenterId),
                     getCandidatesForMarketCenter(userData.marketCenterId)
                 ]);

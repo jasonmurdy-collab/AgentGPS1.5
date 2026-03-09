@@ -394,14 +394,34 @@ const LiveSessionsManagement: React.FC = () => {
     useEffect(() => {
         const fetchSessions = async () => {
             const db = getFirestoreInstance();
-            if (!db) return;
-            const q = query(collection(db, 'liveSessions'), orderBy('startTime', 'desc'), limit(10));
-            const snap = await getDocs(q);
-            setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() } as LiveSession)));
-            setLoading(false);
+            if (!db || !userData) return;
+            
+            try {
+                let q;
+                if (userData.isSuperAdmin) {
+                    q = query(collection(db, 'liveSessions'), orderBy('startTime', 'desc'), limit(20));
+                } else if (userData.marketCenterId) {
+                    q = query(
+                        collection(db, 'liveSessions'), 
+                        where('marketCenterId', '==', userData.marketCenterId),
+                        orderBy('startTime', 'desc'), 
+                        limit(20)
+                    );
+                } else {
+                    setLoading(false);
+                    return;
+                }
+
+                const snap = await getDocs(q);
+                setSessions(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as LiveSession)));
+            } catch (error) {
+                console.error("Error fetching sessions in Admin:", error);
+            } finally {
+                setLoading(false);
+            }
         };
         fetchSessions();
-    }, []);
+    }, [userData]);
 
     const handleDelete = async (id: string) => {
         if (!window.confirm("Cancel this session?")) return;

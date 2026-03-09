@@ -20,7 +20,6 @@ import {
     query, 
     where, 
     or,
-    and,
     getDocs,
     arrayUnion,
     arrayRemove,
@@ -31,7 +30,8 @@ import {
     serverTimestamp,
     addDoc,
     orderBy,
-    deleteDoc
+    deleteDoc,
+    limit
 } from 'firebase/firestore';
 import { processDailyTrackerDoc, processTransactionDoc, processCommissionProfileDoc, processUserDoc, processTeamDoc, processPerformanceLogDoc, processPlaybookDoc, processClientLeadDoc, processClientLeadActivityDoc, processTodoItemDoc } from '../lib/firestoreUtils';
 import type { Team, TeamMember, NewAgentResources, NewAgentHomework, NewAgentResourceLink, CommissionProfile, Transaction, PerformanceLog, DailyTrackerData, BudgetModelInputs, MarketCenter, MarketCenterBranding, Candidate, CandidateActivity, ClientLead, ClientLeadActivity, OrgBlueprint, Playbook, TodoItem, DashboardWidgetConfig } from '../types';
@@ -116,7 +116,7 @@ interface AuthContextType {
   updateOnboardingChecklistProgress: (completedItemIds: string[]) => Promise<void>;
   getPlaybooksForUser: (userId: string) => Promise<Playbook[]>;
   getTransactionsForMarketCenter: (marketCenterId: string) => Promise<Transaction[]>;
-  getCommissionProfilesForMarketCenter: (agentIds: string[]) => Promise<CommissionProfile[]>;
+  getCommissionProfilesForMarketCenter: (marketCenterId: string) => Promise<CommissionProfile[]>;
   getBudgetModelsForMarketCenter: (marketCenterId: string) => Promise<BudgetModelInputs[]>;
   getCandidatesForMarketCenter: (marketCenterId: string) => Promise<Candidate[]>;
   getCandidatesForRecruiter: (recruiterId: string) => Promise<Candidate[]>;
@@ -473,24 +473,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getHabitLogsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
         if (!db || managedAgents.length === 0 || !userData) return {};
-        const agentIds = managedAgents.map(a => a.id);
         
         let q;
         if (P.isSuperAdmin(userData)) {
-            q = query(collection(db, 'dailyTrackers'), where('userId', 'in', agentIds));
+            q = query(collection(db, 'dailyTrackers'), limit(500));
         } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-            q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', agentIds));
-        } else {
-            q = query(
-                collection(db, 'dailyTrackers'), 
-                and(
-                    or(
-                        where('coachId', '==', user?.uid),
-                        where('teamId', '==', userData.teamId || '___none___')
-                    ),
-                    where('userId', 'in', agentIds)
-                )
-            );
+            q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId));
+        } else if (userData.role === 'productivity_coach') {
+            q = query(collection(db, 'dailyTrackers'), where('coachId', '==', user?.uid));
+        } else if (userData.role === 'team_leader' && userData.teamId) {
+            q = query(collection(db, 'dailyTrackers'), where('teamId', '==', userData.teamId));
         }
 
         const snap = await getDocs(q);
@@ -514,16 +506,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', userId), orderBy('date', 'desc'));
         } else if (userId === user.uid) {
             q = query(collection(db, 'dailyTrackers'), where('userId', '==', userId), orderBy('date', 'desc'));
-        } else {
+        } else if (userData.role === 'productivity_coach') {
             q = query(
                 collection(db, 'dailyTrackers'), 
-                and(
-                    or(
-                        where('coachId', '==', user.uid),
-                        where('teamId', '==', userData.teamId || '___none___')
-                    ),
-                    where('userId', '==', userId)
-                ),
+                where('coachId', '==', user.uid),
+                where('userId', '==', userId), 
+                orderBy('date', 'desc')
+            );
+        } else if (userData.role === 'team_leader' && userData.teamId) {
+            q = query(
+                collection(db, 'dailyTrackers'), 
+                where('teamId', '==', userData.teamId),
+                where('userId', '==', userId), 
                 orderBy('date', 'desc')
             );
         }
@@ -572,16 +566,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
             } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
                 q = query(collection(db, 'transactions'), where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
-            } else {
+            } else if (userData.role === 'productivity_coach') {
                 q = query(
                     collection(db, 'transactions'), 
-                    and(
-                        or(
-                            where('coachId', '==', user?.uid),
-                            where('teamId', '==', userData.teamId || '___none___')
-                        ),
-                        where('userId', 'in', chunk)
-                    )
+                    where('coachId', '==', user?.uid),
+                    where('userId', 'in', chunk)
+                );
+            } else if (userData.role === 'team_leader' && userData.teamId) {
+                q = query(
+                    collection(db, 'transactions'), 
+                    where('teamId', '==', userData.teamId),
+                    where('userId', 'in', chunk)
                 );
             }
 
@@ -603,16 +598,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             q = query(collection(db, 'transactions'), where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', userId));
         } else if (userId === user.uid) {
             q = query(collection(db, 'transactions'), where('userId', '==', userId));
-        } else {
+        } else if (userData.role === 'productivity_coach') {
             q = query(
                 collection(db, 'transactions'), 
-                and(
-                    or(
-                        where('coachId', '==', user.uid),
-                        where('teamId', '==', userData.teamId || '___none___')
-                    ),
-                    where('userId', '==', userId)
-                )
+                where('coachId', '==', user.uid),
+                where('userId', '==', userId)
+            );
+        } else if (userData.role === 'team_leader' && userData.teamId) {
+            q = query(
+                collection(db, 'transactions'), 
+                where('teamId', '==', userData.teamId),
+                where('userId', '==', userId)
             );
         }
 
@@ -644,16 +640,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             q = query(collection(db, 'performanceLogs'), where('marketCenterId', '==', userData.marketCenterId), where('agentId', '==', agentId), orderBy('date', 'desc'));
         } else if (agentId === user.uid) {
             q = query(collection(db, 'performanceLogs'), where('agentId', '==', agentId), orderBy('date', 'desc'));
-        } else {
+        } else if (userData.role === 'productivity_coach') {
             q = query(
                 collection(db, 'performanceLogs'), 
-                and(
-                    or(
-                        where('coachId', '==', user.uid),
-                        where('teamId', '==', userData.teamId || '___none___')
-                    ),
-                    where('agentId', '==', agentId)
-                ),
+                where('coachId', '==', user.uid),
+                where('agentId', '==', agentId), 
+                orderBy('date', 'desc')
+            );
+        } else if (userData.role === 'team_leader' && userData.teamId) {
+            q = query(
+                collection(db, 'performanceLogs'), 
+                where('teamId', '==', userData.teamId),
+                where('agentId', '==', agentId), 
                 orderBy('date', 'desc')
             );
         }
@@ -673,24 +671,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getPerformanceLogsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
         if (!db || managedAgents.length === 0 || !userData) return {};
-        const agentIds = managedAgents.map(a => a.id);
         
         let q;
         if (P.isSuperAdmin(userData)) {
-            q = query(collection(db, 'performanceLogs'), where('agentId', 'in', agentIds));
+            q = query(collection(db, 'performanceLogs'), limit(500));
         } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-            q = query(collection(db, 'performanceLogs'), where('marketCenterId', '==', userData.marketCenterId), where('agentId', 'in', agentIds));
-        } else {
-            q = query(
-                collection(db, 'performanceLogs'), 
-                and(
-                    or(
-                        where('coachId', '==', user?.uid),
-                        where('teamId', '==', userData.teamId || '___none___')
-                    ),
-                    where('agentId', 'in', agentIds)
-                )
-            );
+            q = query(collection(db, 'performanceLogs'), where('marketCenterId', '==', userData.marketCenterId));
+        } else if (userData.role === 'productivity_coach') {
+            q = query(collection(db, 'performanceLogs'), where('coachId', '==', user?.uid));
+        } else if (userData.role === 'team_leader' && userData.teamId) {
+            q = query(collection(db, 'performanceLogs'), where('teamId', '==', userData.teamId));
         }
 
         const snap = await getDocs(q);
@@ -885,10 +875,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return snap.docs.map(processTransactionDoc);
     }, []);
 
-    const getCommissionProfilesForMarketCenter = useCallback(async (agentIds: string[]) => {
+    const getCommissionProfilesForMarketCenter = useCallback(async (marketCenterId: string) => {
         const db = getFirestoreInstance();
-        if (!db || agentIds.length === 0) return [];
-        const q = query(collection(db, 'commissionProfiles'), where(documentId(), 'in', agentIds.slice(0, 10)));
+        if (!db) return [];
+        const q = query(collection(db, 'commissionProfiles'), where('marketCenterId', '==', marketCenterId));
         const snap = await getDocs(q);
         return snap.docs.map(processCommissionProfileDoc);
     }, []);

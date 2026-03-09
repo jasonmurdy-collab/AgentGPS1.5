@@ -6,8 +6,6 @@ import {
     collection, 
     query, 
     where, 
-    or,
-    and,
     onSnapshot, 
     addDoc, 
     doc, 
@@ -18,7 +16,8 @@ import {
     orderBy,
     Timestamp,
     deleteDoc,
-    runTransaction
+    runTransaction,
+    limit
 } from 'firebase/firestore';
 import { createNotification } from '../lib/notifications';
 import { processGoalDoc } from '../lib/firestoreUtils';
@@ -134,21 +133,15 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let q;
 
     if (P.isSuperAdmin(userData)) {
-        q = query(goalsCollectionRef, where('userId', 'in', agentIds));
+        // Super Admin can see everything, but let's limit to something reasonable or just personal for now
+        // if they want to see all, they can use getAllGoals
+        q = query(goalsCollectionRef, limit(100)); 
     } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-        q = query(goalsCollectionRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', agentIds));
-    } else if (P.isTeamLeader(userData)) {
-        // Covers both Coaches and Team Leaders with an 'or' query to satisfy security rules
-        q = query(
-            goalsCollectionRef, 
-            and(
-                or(
-                    where('coachId', '==', user.uid),
-                    where('teamId', '==', userData.teamId || '___none___')
-                ),
-                where('userId', 'in', agentIds)
-            )
-        );
+        // MC Admin and Coaches can see all goals in their Market Center
+        q = query(goalsCollectionRef, where('marketCenterId', '==', userData.marketCenterId));
+    } else if (userData.role === 'team_leader' && userData.teamId) {
+        // Team Leaders can see all goals in their Team
+        q = query(goalsCollectionRef, where('teamId', '==', userData.teamId));
     }
     
     if (!q) {

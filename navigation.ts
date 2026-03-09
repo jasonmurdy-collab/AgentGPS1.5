@@ -72,6 +72,7 @@ export const teamLeaderNavSections = [
             navItems.MY_BUSINESS_HUB,
             navItems.TEAM_HUB,
             navItems.RECRUITING_HUB,
+            { name: 'Development', icon: Edit3, path: '/resource-management' },
         ]
     },
     {
