@@ -6,7 +6,7 @@ import type { CommissionProfile, Transaction, ProcessedTransaction, TeamMember }
 import { BarChartHorizontal, ChevronDown, ChevronUp, Search, AlertTriangle } from 'lucide-react';
 // Fix: 'db' is not an exported member of '../firebaseConfig'. Replaced with 'getFirestoreInstance'.
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, query, where, getDocs, documentId, or, and } from 'firebase/firestore';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { processTransactionsForCoach } from '../lib/transactionUtils';
 import { processTransactionDoc, processCommissionProfileDoc } from '../lib/firestoreUtils';
 
@@ -68,24 +68,14 @@ const CoachTransactionsPage: React.FC = () => {
                 } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
                     const tSnap = await getDocs(query(transactionsRef, where('marketCenterId', '==', userData.marketCenterId)));
                     allTransactions.push(...tSnap.docs.map(processTransactionDoc));
-                } else if (P.isCoach(userData) || (P.isTeamLeader(userData) && userData.teamId)) {
+                } else if (P.isCoach(userData) || P.isTeamLeader(userData)) {
                     // Use managed agents list for both Coaches and Team Leaders to be consistent and robust
                     const agentIds = agents.map(a => a.id);
                     if (agentIds.length > 0) {
                         for (let i = 0; i < agentIds.length; i += 30) {
                             const chunk = agentIds.slice(i, i + 30);
                             
-                            // For Team Leaders who might also be coaches, we use an 'or' query to cover both permissions
-                            const q = query(
-                                transactionsRef, 
-                                and(
-                                    or(
-                                        where('coachId', '==', user.uid),
-                                        where('teamId', '==', userData.teamId || '___none___')
-                                    ),
-                                    where('userId', 'in', chunk)
-                                )
-                            );
+                            const q = query(transactionsRef, where('userId', 'in', chunk));
                             
                             const tSnap = await getDocs(q);
                             allTransactions.push(...tSnap.docs.map(processTransactionDoc));

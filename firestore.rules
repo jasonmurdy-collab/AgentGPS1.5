@@ -26,16 +26,13 @@ service cloud.firestore {
       let user = getUserData();
       return isSuperAdmin() ||
              (ownerId != null && request.auth.uid == ownerId) ||
+             (data.get('coachId', null) != null && request.auth.uid == data.coachId) ||
              (data.get('marketCenterId', null) != null && user.marketCenterId == data.marketCenterId && (user.role == 'market_center_admin' || user.role == 'productivity_coach')) ||
-             (data.get('teamId', null) != null && user.teamId == data.teamId && user.role == 'team_leader') ||
-             (data.get('coachId', null) != null && request.auth.uid == data.coachId);
+             (data.get('teamId', null) != null && user.teamId == data.teamId && user.role == 'team_leader');
     }
 
     function isResourceManager(data) {
-      let user = getUserData();
-      return isSuperAdmin() ||
-             (data.get('marketCenterId', null) != null && user.marketCenterId == data.marketCenterId && (user.role == 'market_center_admin' || user.role == 'productivity_coach')) ||
-             (data.get('teamId', null) != null && user.teamId == data.teamId && user.role == 'team_leader');
+      return isSuperAdmin();
     }
 
     function isMCManager(mcId) {

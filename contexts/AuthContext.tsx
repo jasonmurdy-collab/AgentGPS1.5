@@ -175,10 +175,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (user) {
             setLoading(true);
             unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-                if (docSnap.exists()) setUserData(processUserDoc(docSnap));
-                else setUserData(null);
+                if (docSnap.exists()) {
+                    const data = processUserDoc(docSnap);
+                    console.log("UserData loaded:", data);
+                    setUserData(data);
+                } else {
+                    console.log("UserData not found");
+                    setUserData(null);
+                }
                 setLoading(false);
-            }, () => { setUserData(null); setLoading(false); });
+            }, (error) => {
+                console.error("Error loading UserData:", error);
+                setUserData(null); 
+                setLoading(false); 
+            });
         } else {
             setUserData(null); setManagedAgents([]); setLoading(false); setLoadingAgents(false);
         }
@@ -561,31 +571,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
             
-            let q;
-            if (P.isSuperAdmin(userData)) {
-                q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
-            } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-                q = query(collection(db, 'transactions'), where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
-            } else if (userData.role === 'productivity_coach') {
-                q = query(
-                    collection(db, 'transactions'), 
-                    where('coachId', '==', user?.uid),
-                    where('userId', 'in', chunk)
-                );
-            } else if (userData.role === 'team_leader' && userData.teamId) {
-                q = query(
-                    collection(db, 'transactions'), 
-                    where('teamId', '==', userData.teamId),
-                    where('userId', 'in', chunk)
-                );
-            }
+            const q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
 
             const snap = await getDocs(q);
             allTransactions.push(...snap.docs.map(processTransactionDoc));
         }
         
         return allTransactions;
-    }, [managedAgents, userData, user]);
+    }, [managedAgents, userData]);
 
     const getTransactionsForUser = useCallback(async (userId: string) => {
         const db = getFirestoreInstance();
