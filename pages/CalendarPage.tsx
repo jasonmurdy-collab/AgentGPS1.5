@@ -31,47 +31,58 @@ const CalendarPage: React.FC = () => {
         enabled: viewMode === 'mc'
     });
 
-    const { data: personalEvents, isLoading: isPersonalLoading, error: personalError } = useQuery({
-        queryKey: ['personalEvents', user?.uid],
+    const { data: googleEvents, isLoading: isGoogleLoading, error: googleError } = useQuery({
+        queryKey: ['googleEvents', user?.uid],
         queryFn: async () => {
             if (!user) return [];
             const db = getFirestoreInstance();
-            
-            // 1. Fetch Google Calendar events
             const integrationDoc = await getDoc(doc(db, 'userIntegrations', user.uid));
             if (!integrationDoc.exists()) {
                 setHasIntegration(false);
                 return [];
             }
             setHasIntegration(true);
-            const { accessToken } = integrationDoc.data();
-            const res = await axios.post('/api/calendar/list-events', { accessToken });
-            const googleEvents = res.data.events.map((e: any) => ({
+            const res = await axios.post('/api/calendar/list-events', { userId: user.uid });
+            return res.data.events.map((e: any) => ({
                 title: e.summary,
                 start: e.start.dateTime || e.start.date,
                 end: e.end.dateTime || e.end.date,
                 backgroundColor: '#3b82f6'
             }));
+        },
+        enabled: viewMode === 'personal' && !!user
+    });
 
-            // 2. Fetch RSVP'd Live Sessions
+    const { data: liveSessions, isLoading: isSessionsLoading, error: sessionsError } = useQuery({
+        queryKey: ['liveSessions', user?.uid],
+        queryFn: async () => {
+            if (!user) return [];
+            const db = getFirestoreInstance();
             const sessionsQuery = query(collection(db, 'liveSessions'), where('attendees', 'array-contains', user.email || ''));
             const sessionsSnap = await getDocs(sessionsQuery);
-            const liveSessions = sessionsSnap.docs.map(doc => ({
+            return sessionsSnap.docs.map(doc => ({
                 title: doc.data().title,
                 start: doc.data().startTime,
                 end: doc.data().endTime,
                 backgroundColor: '#10b981'
             }));
-
-            return [...googleEvents, ...liveSessions];
         },
         enabled: viewMode === 'personal' && !!user
     });
 
+    const personalEvents = [...(googleEvents || []), ...(liveSessions || [])];
+    const isPersonalLoading = isGoogleLoading || isSessionsLoading;
+    const personalError = googleError || sessionsError;
+
     const handleConnectCalendar = async () => {
+        if (!user) return;
         try {
-            const res = await axios.get('/api/auth/google-calendar-url');
+            const res = await axios.get(`/api/auth/google-calendar-url?userId=${user.uid}`);
             const authWindow = window.open(res.data.url, 'oauth_popup', 'width=600,height=700');
+            if (!authWindow) {
+                alert('Please allow popups for this site to connect your calendar.');
+                return;
+            }
             
             const handleMessage = (event: MessageEvent) => {
                 if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {

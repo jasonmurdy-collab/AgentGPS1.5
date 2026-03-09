@@ -9,31 +9,40 @@ service cloud.firestore {
     }
     
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data : {
+        role: 'agent',
+        marketCenterId: null,
+        teamId: null,
+        isSuperAdmin: false
+      };
     }
     
     function isSuperAdmin() {
-      return isSignedIn() && getUserData().isSuperAdmin == true;
+      return isSignedIn() && getUserData().get('isSuperAdmin', false) == true;
     }
     
-    function isMcAdmin(mcId) {
-      let user = getUserData();
-      return isSuperAdmin() || (user.role == 'market_center_admin' && user.marketCenterId == mcId);
-    }
-
     function canManageAgent(agentData, agentId) {
       let user = getUserData();
       return isSuperAdmin() || 
+             (request.auth.uid == agentId) ||
              (user.role == 'market_center_admin' && user.marketCenterId == agentData.marketCenterId) || 
              (user.role == 'productivity_coach' && user.marketCenterId == agentData.marketCenterId) ||
-             (request.auth.uid == agentData.coachId) ||
+             (user.role == 'recruiter' && user.marketCenterId == agentData.marketCenterId) ||
+             (request.auth.uid == agentData.get('coachId', null)) ||
              (user.role == 'team_leader' && user.teamId != null && user.teamId == agentData.teamId);
     }
 
     function canManageMCResources(mcId) {
       let user = getUserData();
       return isSuperAdmin() || 
-             (isSignedIn() && user.marketCenterId == mcId && (user.role == 'market_center_admin' || user.role == 'productivity_coach'));
+             (isSignedIn() && mcId != null && user.marketCenterId == mcId && (user.role == 'market_center_admin' || user.role == 'productivity_coach'));
+    }
+
+    function isMCManager(mcId) {
+      let user = getUserData();
+      return isSuperAdmin() || 
+             (isSignedIn() && mcId != null && user.marketCenterId == mcId && (user.role == 'market_center_admin' || user.role == 'productivity_coach' || user.role == 'recruiter'));
     }
 
     // --- Collection Rules ---
@@ -44,7 +53,7 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == userId || 
-        isMcAdmin(resource.data.marketCenterId) || 
+        canManageAgent(resource.data, userId) ||
         isSuperAdmin()
       );
       allow delete: if isSuperAdmin();
@@ -54,13 +63,16 @@ service cloud.firestore {
     match /goals/{goalId} {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        isMcAdmin(resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId)
+        resource.data.get('visibility', 'solo') == 'public' ||
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
       );
       allow write: if isSignedIn() && (
         request.auth.uid == request.resource.data.userId || 
-        isMcAdmin(request.resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId)
+        canManageMCResources(request.resource.data.marketCenterId) ||
+        request.auth.uid == request.resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.teamId)
       );
     }
 
@@ -68,13 +80,15 @@ service cloud.firestore {
     match /transactions/{txId} {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        isMcAdmin(resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId)
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
       );
       allow write: if isSignedIn() && (
         request.auth.uid == request.resource.data.userId || 
-        isMcAdmin(request.resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId)
+        canManageMCResources(request.resource.data.marketCenterId) ||
+        request.auth.uid == request.resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.teamId)
       );
     }
 
@@ -82,13 +96,15 @@ service cloud.firestore {
     match /dailyTrackers/{trackerId} {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        isMcAdmin(resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId)
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
       );
       allow write: if isSignedIn() && (
         request.auth.uid == request.resource.data.userId || 
-        isMcAdmin(request.resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId)
+        canManageMCResources(request.resource.data.marketCenterId) ||
+        request.auth.uid == request.resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.teamId)
       );
     }
 
@@ -96,13 +112,14 @@ service cloud.firestore {
     match /performanceLogs/{logId} {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.agentId || 
-        isMcAdmin(resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.agentId)).data, resource.data.agentId)
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
       );
       allow write: if isSignedIn() && (
         request.auth.uid == request.resource.data.coachId || 
-        isMcAdmin(request.resource.data.marketCenterId) ||
-        canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.agentId)).data, resource.data.agentId)
+        canManageMCResources(request.resource.data.marketCenterId) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.teamId)
       );
     }
 
@@ -110,10 +127,9 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow read: if isSignedIn() && (
         request.auth.uid in resource.data.memberIds || 
-        isMcAdmin(resource.data.marketCenterId) ||
-        (getUserData().role == 'productivity_coach' && getUserData().marketCenterId == resource.data.marketCenterId)
+        canManageMCResources(resource.data.marketCenterId)
       );
-      allow write: if isSignedIn() && (request.auth.uid == resource.data.creatorId || isMcAdmin(resource.data.marketCenterId));
+      allow write: if isSignedIn() && (request.auth.uid == resource.data.creatorId || canManageMCResources(resource.data.marketCenterId));
     }
 
     // Market Centers
@@ -124,14 +140,50 @@ service cloud.firestore {
 
     // Candidates (Recruitment)
     match /candidates/{candidateId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.recruiterId || isMcAdmin(resource.data.marketCenterId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.recruiterId || isMcAdmin(request.resource.data.marketCenterId));
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.recruiterId || isMCManager(resource.data.marketCenterId));
+      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.recruiterId || isMCManager(request.resource.data.marketCenterId) || (resource != null && isMCManager(resource.data.marketCenterId)));
+    }
+
+    // Candidate Activities
+    match /candidateActivities/{activityId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.get('recruiterId', null) ||
+        isMCManager(resource.data.get('marketCenterId', null))
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.get('recruiterId', null) ||
+        isMCManager(request.resource.data.get('marketCenterId', null))
+      );
     }
 
     // Client Leads
     match /clientLeads/{leadId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.ownerId || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.ownerId)).data, resource.data.ownerId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.ownerId || canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.ownerId)).data, request.resource.data.ownerId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.ownerId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.ownerId || 
+        canManageMCResources(request.resource.data.marketCenterId) ||
+        request.auth.uid == request.resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.teamId)
+      );
+    }
+
+    // Client Lead Activities
+    match /clientLeadActivities/{activityId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.get('ownerId', null) ||
+        canManageMCResources(resource.data.get('marketCenterId', null)) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.get('teamId', null))
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.get('ownerId', null) ||
+        canManageMCResources(request.resource.data.get('marketCenterId', null)) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.get('teamId', null))
+      );
     }
     
     // Todos
@@ -142,7 +194,7 @@ service cloud.firestore {
     // Announcements
     match /announcements/{annId} {
       allow read: if isSignedIn() && (resource.data.marketCenterId == null || resource.data.marketCenterId == getUserData().marketCenterId);
-      allow write: if isSignedIn() && isMcAdmin(request.resource.data.marketCenterId);
+      allow write: if isSignedIn() && canManageMCResources(request.resource.data.marketCenterId);
     }
 
     // Playbooks and Learning Paths
@@ -157,9 +209,19 @@ service cloud.firestore {
     }
 
     // User Submissions (LMS)
-    match /userSubmissions/{subId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId));
-      allow write: if isSignedIn() && (request.auth.uid == request.resource.data.userId || canManageAgent(get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data, request.resource.data.userId));
+    match /submissions/{subId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.userId || 
+        canManageMCResources(request.resource.data.marketCenterId) ||
+        request.auth.uid == request.resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == request.resource.data.teamId)
+      );
     }
 
     // Notifications
@@ -170,38 +232,72 @@ service cloud.firestore {
 
     // Commission Profiles
     match /commissionProfiles/{profileId} {
-      allow read: if isSignedIn() && (request.auth.uid == profileId || isMcAdmin(resource.data.marketCenterId) || canManageAgent(get(/databases/$(database)/documents/users/$(profileId)).data, profileId));
-      allow write: if isSignedIn() && (request.auth.uid == profileId || isMcAdmin(resource.data.marketCenterId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == profileId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
+      allow write: if isSignedIn() && (request.auth.uid == profileId || canManageMCResources(resource.data.marketCenterId) || request.auth.uid == resource.data.get('coachId', null));
     }
 
     // Budget Models
     match /budgetModels/{modelId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isMcAdmin(resource.data.marketCenterId) || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId));
-      allow write: if isSignedIn() && (request.auth.uid == resource.data.userId || isMcAdmin(resource.data.marketCenterId) || canManageAgent(get(/databases/$(database)/documents/users/$(resource.data.userId)).data, resource.data.userId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
     }
 
     // Live Sessions
-    match /{path=**}/liveSessions/{sessionId} {
-      allow read: if isSignedIn() && (resource.data.marketCenterId == getUserData().marketCenterId || isSuperAdmin());
-      allow write: if isSignedIn() && (resource.data.marketCenterId == getUserData().marketCenterId || isSuperAdmin());
+    match /liveSessions/{sessionId} {
+      allow read: if isSignedIn() && (
+        (resource.data.marketCenterId != null && resource.data.marketCenterId == getUserData().marketCenterId) || 
+        isSuperAdmin() || 
+        (request.auth.token.email in resource.data.get('attendees', []))
+      );
+      allow write: if isSignedIn() && (canManageMCResources(request.resource.data.marketCenterId) || isSuperAdmin() || (resource != null && canManageMCResources(resource.data.marketCenterId)));
+    }
+
+    // User Integrations
+    match /userIntegrations/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Business GPS
     match /businessGps/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || canManageAgent(get(/databases/$(database)/documents/users/$(userId)).data, userId));
-      allow write: if isSignedIn() && (request.auth.uid == userId || isMcAdmin(get(/databases/$(database)/documents/users/$(userId)).data.marketCenterId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
+      allow write: if isSignedIn() && (request.auth.uid == userId || canManageMCResources(get(/databases/$(database)/documents/users/$(userId)).data.marketCenterId) || request.auth.uid == get(/databases/$(database)/documents/users/$(userId)).data.get('coachId', null));
     }
 
     // Habit Tracker Templates
     match /habitTrackerTemplates/{templateId} {
       allow read: if isSignedIn();
-      allow write: if isSuperAdmin() || (isSignedIn() && isMcAdmin(request.resource.data.marketCenterId));
+      allow write: if isSuperAdmin() || (isSignedIn() && canManageMCResources(request.resource.data.marketCenterId));
     }
 
     // Organizational Blueprints
     match /orgBlueprints/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || canManageAgent(get(/databases/$(database)/documents/users/$(userId)).data, userId));
-      allow write: if isSignedIn() && (request.auth.uid == userId || isMcAdmin(get(/databases/$(database)/documents/users/$(userId)).data.marketCenterId));
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        canManageMCResources(resource.data.marketCenterId) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        (getUserData().role == 'team_leader' && getUserData().teamId != null && getUserData().teamId == resource.data.teamId)
+      );
+      allow write: if isSignedIn() && (request.auth.uid == userId || canManageMCResources(get(/databases/$(database)/documents/users/$(userId)).data.marketCenterId) || request.auth.uid == get(/databases/$(database)/documents/users/$(userId)).data.get('coachId', null));
     }
   }
 }

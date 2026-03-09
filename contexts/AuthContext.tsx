@@ -20,6 +20,7 @@ import {
     query, 
     where, 
     or,
+    and,
     getDocs,
     arrayUnion,
     arrayRemove,
@@ -471,9 +472,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const getHabitLogsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
-        if (!db || managedAgents.length === 0) return {};
+        if (!db || managedAgents.length === 0 || !userData) return {};
         const agentIds = managedAgents.map(a => a.id);
-        const q = query(collection(db, 'dailyTrackers'), where('userId', 'in', agentIds));
+        
+        let q;
+        if (P.isSuperAdmin(userData)) {
+            q = query(collection(db, 'dailyTrackers'), where('userId', 'in', agentIds));
+        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', agentIds));
+        } else {
+            q = query(
+                collection(db, 'dailyTrackers'), 
+                and(
+                    or(
+                        where('coachId', '==', user?.uid),
+                        where('teamId', '==', userData.teamId || '___none___')
+                    ),
+                    where('userId', 'in', agentIds)
+                )
+            );
+        }
+
         const snap = await getDocs(q);
         const res: Record<string, DailyTrackerData[]> = {};
         snap.docs.forEach(doc => {
@@ -482,15 +501,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             res[data.userId].push(data);
         });
         return res;
-    }, [managedAgents]);
+    }, [managedAgents, userData, user]);
 
     const getHabitLogsForUser = useCallback(async (userId: string) => {
         const db = getFirestoreInstance();
-        if (!db) return [];
-        const q = query(collection(db, 'dailyTrackers'), where('userId', '==', userId), orderBy('date', 'desc'));
+        if (!db || !user || !userData) return [];
+        
+        let q;
+        if (P.isSuperAdmin(userData)) {
+            q = query(collection(db, 'dailyTrackers'), where('userId', '==', userId), orderBy('date', 'desc'));
+        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', userId), orderBy('date', 'desc'));
+        } else if (userId === user.uid) {
+            q = query(collection(db, 'dailyTrackers'), where('userId', '==', userId), orderBy('date', 'desc'));
+        } else {
+            q = query(
+                collection(db, 'dailyTrackers'), 
+                and(
+                    or(
+                        where('coachId', '==', user.uid),
+                        where('teamId', '==', userData.teamId || '___none___')
+                    ),
+                    where('userId', '==', userId)
+                ),
+                orderBy('date', 'desc')
+            );
+        }
+
         const snap = await getDocs(q);
         return snap.docs.map(processDailyTrackerDoc);
-    }, []);
+    }, [user, userData]);
 
     const deleteHomeworkForUser = useCallback(async (homeworkId: string) => {
         const db = getFirestoreInstance();
@@ -519,28 +559,66 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const getTransactionsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
-        if (!db || managedAgents.length === 0) return [];
+        if (!db || managedAgents.length === 0 || !userData) return [];
         const agentIds = managedAgents.map(a => a.id);
         const allTransactions: Transaction[] = [];
         
         // Chunk the agent IDs for the 'in' query (limit 30)
         for (let i = 0; i < agentIds.length; i += 30) {
             const chunk = agentIds.slice(i, i + 30);
-            const q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
+            
+            let q;
+            if (P.isSuperAdmin(userData)) {
+                q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
+            } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+                q = query(collection(db, 'transactions'), where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', chunk));
+            } else {
+                q = query(
+                    collection(db, 'transactions'), 
+                    and(
+                        or(
+                            where('coachId', '==', user?.uid),
+                            where('teamId', '==', userData.teamId || '___none___')
+                        ),
+                        where('userId', 'in', chunk)
+                    )
+                );
+            }
+
             const snap = await getDocs(q);
             allTransactions.push(...snap.docs.map(processTransactionDoc));
         }
         
         return allTransactions;
-    }, [managedAgents]);
+    }, [managedAgents, userData, user]);
 
     const getTransactionsForUser = useCallback(async (userId: string) => {
         const db = getFirestoreInstance();
-        if (!db) return [];
-        const q = query(collection(db, 'transactions'), where('userId', '==', userId));
+        if (!db || !user || !userData) return [];
+        
+        let q;
+        if (P.isSuperAdmin(userData)) {
+            q = query(collection(db, 'transactions'), where('userId', '==', userId));
+        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            q = query(collection(db, 'transactions'), where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', userId));
+        } else if (userId === user.uid) {
+            q = query(collection(db, 'transactions'), where('userId', '==', userId));
+        } else {
+            q = query(
+                collection(db, 'transactions'), 
+                and(
+                    or(
+                        where('coachId', '==', user.uid),
+                        where('teamId', '==', userData.teamId || '___none___')
+                    ),
+                    where('userId', '==', userId)
+                )
+            );
+        }
+
         const snap = await getDocs(q);
         return snap.docs.map(processTransactionDoc);
-    }, []);
+    }, [user, userData]);
 
     const getAllCommissionProfiles = useCallback(async () => {
         const db = getFirestoreInstance();
@@ -557,11 +635,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const getPerformanceLogsForAgent = useCallback(async (agentId: string) => {
         const db = getFirestoreInstance();
-        if (!db) return [];
-        const q = query(collection(db, 'performanceLogs'), where('agentId', '==', agentId), orderBy('date', 'desc'));
+        if (!db || !user || !userData) return [];
+        
+        let q;
+        if (P.isSuperAdmin(userData)) {
+            q = query(collection(db, 'performanceLogs'), where('agentId', '==', agentId), orderBy('date', 'desc'));
+        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            q = query(collection(db, 'performanceLogs'), where('marketCenterId', '==', userData.marketCenterId), where('agentId', '==', agentId), orderBy('date', 'desc'));
+        } else if (agentId === user.uid) {
+            q = query(collection(db, 'performanceLogs'), where('agentId', '==', agentId), orderBy('date', 'desc'));
+        } else {
+            q = query(
+                collection(db, 'performanceLogs'), 
+                and(
+                    or(
+                        where('coachId', '==', user.uid),
+                        where('teamId', '==', userData.teamId || '___none___')
+                    ),
+                    where('agentId', '==', agentId)
+                ),
+                orderBy('date', 'desc')
+            );
+        }
+
         const snap = await getDocs(q);
         return snap.docs.map(processPerformanceLogDoc);
-    }, []);
+    }, [user, userData]);
 
     const getPerformanceLogsForCurrentUser = useCallback(async () => {
         const db = getFirestoreInstance();
@@ -573,9 +672,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const getPerformanceLogsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
-        if (!db || managedAgents.length === 0) return {};
+        if (!db || managedAgents.length === 0 || !userData) return {};
         const agentIds = managedAgents.map(a => a.id);
-        const q = query(collection(db, 'performanceLogs'), where('agentId', 'in', agentIds));
+        
+        let q;
+        if (P.isSuperAdmin(userData)) {
+            q = query(collection(db, 'performanceLogs'), where('agentId', 'in', agentIds));
+        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            q = query(collection(db, 'performanceLogs'), where('marketCenterId', '==', userData.marketCenterId), where('agentId', 'in', agentIds));
+        } else {
+            q = query(
+                collection(db, 'performanceLogs'), 
+                and(
+                    or(
+                        where('coachId', '==', user?.uid),
+                        where('teamId', '==', userData.teamId || '___none___')
+                    ),
+                    where('agentId', 'in', agentIds)
+                )
+            );
+        }
+
         const snap = await getDocs(q);
         const res: Record<string, PerformanceLog[]> = {};
         snap.docs.forEach(doc => {
@@ -584,7 +701,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             res[data.agentId].push(data);
         });
         return res;
-    }, [managedAgents]);
+    }, [managedAgents, userData, user]);
 
     const updatePerformanceLog = useCallback(async (logId: string, updates: Partial<PerformanceLog>) => {
         const db = getFirestoreInstance();
@@ -830,8 +947,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const addCandidateActivity = useCallback(async (candidateId: string, note: string) => {
         const db = getFirestoreInstance();
         if (!user || !userData || !db) return;
+        
+        // Fetch candidate to get marketCenterId and recruiterId for the activity doc
+        const candidateSnap = await getDoc(doc(db, 'candidates', candidateId));
+        if (!candidateSnap.exists()) return;
+        const candidateData = candidateSnap.data();
+
         await addDoc(collection(db, 'candidateActivities'), {
-            candidateId, userId: user.uid, userName: userData.name, note, createdAt: serverTimestamp()
+            candidateId, 
+            userId: user.uid, 
+            userName: userData.name, 
+            note, 
+            createdAt: serverTimestamp(),
+            marketCenterId: candidateData.marketCenterId || null,
+            recruiterId: candidateData.recruiterId || null
         });
     }, [user, userData]);
 
@@ -884,8 +1013,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const addClientLeadActivity = useCallback(async (clientLeadId: string, note: string) => {
         const db = getFirestoreInstance();
         if (!user || !userData || !db) return;
+
+        // Fetch lead to get marketCenterId and ownerId for the activity doc
+        const leadSnap = await getDoc(doc(db, 'clientLeads', clientLeadId));
+        if (!leadSnap.exists()) return;
+        const leadData = leadSnap.data();
+
         await addDoc(collection(db, 'clientLeadActivities'), {
-            clientLeadId, userId: user.uid, userName: userData.name, note, createdAt: serverTimestamp()
+            clientLeadId, 
+            userId: user.uid, 
+            userName: userData.name, 
+            note, 
+            createdAt: serverTimestamp(),
+            marketCenterId: leadData.marketCenterId || null,
+            ownerId: leadData.ownerId || null,
+            teamId: leadData.teamId || null
         });
     }, [user, userData]);
 

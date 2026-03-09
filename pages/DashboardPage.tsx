@@ -1,4 +1,7 @@
 
+import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { GoalProgressCard } from '../components/dashboard/GoalProgressCard';
@@ -6,7 +9,7 @@ import { useGoals } from '../contexts/GoalContext';
 import { WelcomeCard } from '../components/dashboard/WelcomeCard';
 import { GpsSummaryCard } from '../components/dashboard/GpsSummaryCard';
 import { SkeletonCard } from '../components/ui/SkeletonCard';
-import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Video, Settings2, ChevronUp, ChevronDown, Check, X as CloseIcon, Eye, EyeOff, Maximize2, Minimize2, Calendar } from 'lucide-react';
+import { PlusCircle, Target, BarChart2, LayoutGrid, BookOpen, ClipboardList, Users, ListTodo, Video, Settings2, ChevronUp, ChevronDown, Check, X as CloseIcon, Eye, EyeOff, Calendar } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { useAuth, P } from '../contexts/AuthContext';
 import { DashboardVisualizations } from '../components/dashboard/DashboardVisualizations';
@@ -18,17 +21,31 @@ import { processPlaybookDoc } from '../lib/firestoreUtils';
 import AnnouncementFeed from '../components/dashboard/AnnouncementFeed';
 import { LiveSessionCard } from '../components/launchpad/LiveSessionCard';
 
+const SortableWidget = ({ id, children, isEditing, className }: { id: string, children: React.ReactNode, isEditing: boolean, className?: string }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+    const style = { 
+        transform: CSS.Transform.toString(transform), 
+        transition,
+        cursor: isEditing ? 'grab' : 'default'
+    };
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={`h-full ${className || ''}`}>
+            {children}
+        </div>
+    );
+};
+
 type WidgetId = 'quick-actions' | 'live-sessions' | 'welcome' | 'goals' | 'learning' | 'announcements' | 'stats' | 'gps';
 
 const DEFAULT_LAYOUT: DashboardWidgetConfig[] = [
-    { id: 'quick-actions', span: 2, visible: true },
-    { id: 'live-sessions', span: 2, visible: true },
-    { id: 'welcome', span: 2, visible: true },
-    { id: 'goals', span: 2, visible: true },
-    { id: 'learning', span: 2, visible: true },
-    { id: 'announcements', span: 1, visible: true },
-    { id: 'stats', span: 1, visible: true },
-    { id: 'gps', span: 1, visible: true }
+    { id: 'quick-actions', span: 2, visible: true, order: 0 },
+    { id: 'live-sessions', span: 2, visible: true, order: 1 },
+    { id: 'welcome', span: 2, visible: true, order: 2 },
+    { id: 'goals', span: 2, visible: true, order: 3 },
+    { id: 'learning', span: 2, visible: true, order: 4 },
+    { id: 'announcements', span: 1, visible: true, order: 5 },
+    { id: 'stats', span: 1, visible: true, order: 6 },
+    { id: 'gps', span: 1, visible: true, order: 7 }
 ];
 
 const WIDGET_METADATA: Record<WidgetId, { title: string }> = {
@@ -251,7 +268,8 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     if (userData?.dashboardLayout && userData.dashboardLayout.length > 0) {
-        setLayout(userData.dashboardLayout);
+        const sortedLayout = [...userData.dashboardLayout].sort((a, b) => a.order - b.order);
+        setLayout(sortedLayout);
     }
   }, [userData?.dashboardLayout]);
 
@@ -322,8 +340,20 @@ const DashboardPage: React.FC = () => {
     await toggleGoalArchiveStatus(goalId, currentStatus);
   };
 
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setLayout((items) => {
+        const oldIndex = items.findIndex(i => i.id === active.id);
+        const newIndex = items.findIndex(i => i.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
   const handleSaveLayout = async () => {
-    await updateDashboardLayout(layout);
+    const layoutWithOrder = layout.map((item, index) => ({ ...item, order: index }));
+    await updateDashboardLayout(layoutWithOrder);
     setIsEditingLayout(false);
   };
 
@@ -408,7 +438,9 @@ const DashboardPage: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
         {activeTab === 'overview' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={layout.map(l => l.id)} strategy={verticalListSortingStrategy}>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             {layout.map((config, index) => {
                 const widgetId = config.id as WidgetId;
                 const metadata = WIDGET_METADATA[widgetId];
@@ -454,7 +486,8 @@ const DashboardPage: React.FC = () => {
                 const spanClass = config.span === 3 ? 'lg:col-span-3' : config.span === 2 ? 'lg:col-span-2' : 'lg:col-span-1';
 
                 return (
-                    <div key={widgetId} className={`${spanClass} relative group transition-all duration-300`}>
+                    <SortableWidget key={widgetId} id={widgetId} isEditing={isEditingLayout} className={spanClass}>
+                        <div className="relative group transition-all duration-300 h-full">
                         {isEditingLayout && (
                             <div className="absolute -top-4 -left-4 z-10 flex items-center gap-1 bg-surface border border-border rounded-xl shadow-2xl p-1.5 animate-in fade-in zoom-in duration-200 ring-4 ring-background">
                                 <div className="flex items-center gap-0.5 pr-2 border-r border-border mr-1">
@@ -477,22 +510,16 @@ const DashboardPage: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-0.5 pr-2 border-r border-border mr-1">
-                                    <button 
-                                        onClick={() => updateWidgetConfig(widgetId, { span: Math.max(1, config.span - 1) as 1|2|3 })}
-                                        disabled={config.span === 1}
-                                        className="p-1.5 hover:bg-primary/10 text-text-secondary hover:text-primary disabled:opacity-30 transition-colors rounded-lg"
-                                        title="Narrower"
+                                    <select 
+                                        value={config.span}
+                                        onChange={(e) => updateWidgetConfig(widgetId, { span: Number(e.target.value) as 1|2|3 })}
+                                        className="bg-surface border border-border rounded-lg p-1 text-[10px] font-bold text-text-secondary hover:text-primary transition-colors cursor-pointer"
+                                        title="Resize Widget"
                                     >
-                                        <Minimize2 size={16}/>
-                                    </button>
-                                    <button 
-                                        onClick={() => updateWidgetConfig(widgetId, { span: Math.min(3, config.span + 1) as 1|2|3 })}
-                                        disabled={config.span === 3}
-                                        className="p-1.5 hover:bg-primary/10 text-text-secondary hover:text-primary disabled:opacity-30 transition-colors rounded-lg"
-                                        title="Wider"
-                                    >
-                                        <Maximize2 size={16}/>
-                                    </button>
+                                        <option value={1}>Small (1 Col)</option>
+                                        <option value={2}>Medium (2 Cols)</option>
+                                        <option value={3}>Large (3 Cols)</option>
+                                    </select>
                                 </div>
 
                                 <button 
@@ -511,9 +538,12 @@ const DashboardPage: React.FC = () => {
                             {content}
                         </div>
                     </div>
+                </SortableWidget>
                 );
             })}
-          </div>
+                </div>
+            </SortableContext>
+          </DndContext>
         ) : (
             <DashboardVisualizations goals={goals} userData={userData ? { ...userData, gci: currentUserGCI, listings: currentUserListings } : null} />
         )}

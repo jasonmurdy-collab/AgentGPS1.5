@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
-import { Rocket, CheckCircle, ChevronDown, ChevronUp, ClipboardList, Link as LinkIcon, ListChecks } from 'lucide-react';
+import { Rocket, CheckCircle, ChevronDown, ClipboardList, Link as LinkIcon, ListChecks } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
-import type { Playbook, Module, Lesson, NewAgentHomework, NewAgentResourceLink, ChecklistItem } from '../types';
+import type { Playbook, NewAgentHomework, NewAgentResourceLink, ChecklistItem } from '../types';
 import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
@@ -95,7 +95,7 @@ const NewAgentResourcesPage: React.FC = () => {
                     <Rocket className="text-accent-secondary" size={48} />
                     My Launchpad
                 </h1>
-                <p className="text-lg text-text-secondary mt-1">Your personalized onboarding journey. Complete these lessons to get started.</p>
+                <p className="text-lg text-text-secondary mt-1">Your personalized learning journey. Complete these assignments to grow your business.</p>
             </header>
 
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8">
@@ -109,7 +109,7 @@ const NewAgentResourcesPage: React.FC = () => {
                         <div className="space-y-6">
                             {onboardingPlaybook && (
                                 <Card>
-                                     <h2 className="text-2xl font-bold mb-4">Onboarding Playbook: {onboardingPlaybook.title}</h2>
+                                     <h2 className="text-2xl font-bold mb-4">Assigned Playbook: {onboardingPlaybook.title}</h2>
                                     {onboardingPlaybook.modules.map(module => (
                                         <div key={module.id} className="mb-2">
                                             <button
@@ -165,7 +165,7 @@ const NewAgentResourcesPage: React.FC = () => {
                         <div className="space-y-6">
                             {onboardingChecklist.length > 0 && (
                                 <Card>
-                                    <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><ListChecks /> Onboarding Checklist</h2>
+                                    <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><ListChecks /> Learning Checklist</h2>
                                     <div className="space-y-2">
                                         {onboardingChecklist.map(item => (
                                             <label key={item.id} htmlFor={`checklist-${item.id}`} className="flex items-start gap-3 p-3 bg-background/50 rounded-lg cursor-pointer hover:bg-primary/5">

@@ -13,13 +13,13 @@ export default defineConfig({
     proxy: {
       // Redirect all /api calls to the local Node.js server
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
         secure: false,
       },
       // Redirect Gemini proxy calls if you're testing those locally too
       '/api-proxy': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
         secure: false,
       },

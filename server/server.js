@@ -16,6 +16,12 @@ const { URLSearchParams, URL } = require('url');
 const rateLimit = require('express-rate-limit');
 const twilio = require('twilio');
 const { google } = require('googleapis');
+const admin = require('firebase-admin');
+
+admin.initializeApp({
+  credential: admin.credential.applicationDefault()
+});
+const db = admin.firestore();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -215,17 +221,39 @@ app.post('/api/send-sms', async (req, res) => {
 });
 
 app.post('/api/calendar/create-event', async (req, res) => {
-    const { accessToken, title, description, startTime, endTime, clientEmail } = req.body;
+    const { userId, title, description, startTime, endTime, clientEmail } = req.body;
     
-    if (!accessToken || !title || !startTime || !endTime) {
+    if (!userId || !title || !startTime || !endTime) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
     try {
-        const auth = new google.auth.OAuth2();
-        auth.setCredentials({ access_token: accessToken });
+        // Get tokens from Firestore
+        const doc = await db.collection('userIntegrations').doc(userId).get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'Integration not found' });
+        }
+        const tokens = doc.data().googleCalendar;
+
+        const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            `${process.env.APP_URL}/api/auth/google-calendar/callback`
+        );
+        oauth2Client.setCredentials(tokens);
+
+        // Check if token is expired and refresh if necessary
+        if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+            oauth2Client.setCredentials(credentials);
+            // Save new tokens to Firestore
+            await db.collection('userIntegrations').doc(userId).set({
+                googleCalendar: credentials,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
         
-        const calendar = google.calendar({ version: 'v3', auth });
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         
         const event = {
             summary: title,
@@ -255,17 +283,39 @@ app.post('/api/calendar/create-event', async (req, res) => {
 });
 
 app.post('/api/calendar/list-events', async (req, res) => {
-    const { accessToken, timeMin, timeMax } = req.body;
+    const { userId, timeMin, timeMax } = req.body;
     
-    if (!accessToken) {
-        return res.status(400).json({ error: 'Missing accessToken' });
+    if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
     }
 
     try {
-        const auth = new google.auth.OAuth2();
-        auth.setCredentials({ access_token: accessToken });
+        // Get tokens from Firestore
+        const doc = await db.collection('userIntegrations').doc(userId).get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'Integration not found' });
+        }
+        const tokens = doc.data().googleCalendar;
+
+        const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            `${process.env.APP_URL}/api/auth/google-calendar/callback`
+        );
+        oauth2Client.setCredentials(tokens);
+
+        // Check if token is expired and refresh if necessary
+        if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+            oauth2Client.setCredentials(credentials);
+            // Save new tokens to Firestore
+            await db.collection('userIntegrations').doc(userId).set({
+                googleCalendar: credentials,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
         
-        const calendar = google.calendar({ version: 'v3', auth });
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         
         const response = await calendar.events.list({
             calendarId: 'primary',
@@ -283,11 +333,15 @@ app.post('/api/calendar/list-events', async (req, res) => {
 });
 
 app.get('/api/auth/google-calendar-url', (req, res) => {
-    console.log("APP_URL:", process.env.APP_URL);
+    const userId = req.query.userId;
+    if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
+
     const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        `${process.env.APP_URL}/auth/callback`
+        `${process.env.APP_URL}/api/auth/google-calendar/callback`
     );
 
     const scopes = ['https://www.googleapis.com/auth/calendar.events.readonly'];
@@ -295,10 +349,51 @@ app.get('/api/auth/google-calendar-url', (req, res) => {
     const url = oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
-        redirect_uri: `${process.env.APP_URL}/auth/callback`
+        redirect_uri: `${process.env.APP_URL}/api/auth/google-calendar/callback`,
+        state: userId
     });
 
     res.json({ url });
+});
+
+app.get('/api/auth/google-calendar/callback', async (req, res) => {
+    const { code, state } = req.query; // state is the userId
+    if (!code || !state) {
+        return res.status(400).json({ error: 'Missing code or state' });
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        `${process.env.APP_URL}/api/auth/google-calendar/callback`
+    );
+
+    try {
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+
+        // Save tokens to Firestore
+        await db.collection('userIntegrations').doc(state).set({
+            googleCalendar: tokens,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Serve small HTML page
+        res.send(`
+            <html>
+                <body>
+                    <script>
+                        window.opener.postMessage({type: 'OAUTH_AUTH_SUCCESS'}, '*');
+                        window.close();
+                    </script>
+                    <p>Authentication successful. This window should close automatically.</p>
+                </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Callback error:', error);
+        res.status(500).json({ error: 'Failed to exchange code' });
+    }
 });
 
 const webSocketInterceptorScriptTag = `<script src="/public/websocket-interceptor.js" defer></script>`;

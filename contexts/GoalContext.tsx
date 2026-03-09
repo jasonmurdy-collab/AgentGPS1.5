@@ -6,6 +6,8 @@ import {
     collection, 
     query, 
     where, 
+    or,
+    and,
     onSnapshot, 
     addDoc, 
     doc, 
@@ -135,10 +137,18 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         q = query(goalsCollectionRef, where('userId', 'in', agentIds));
     } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
         q = query(goalsCollectionRef, where('marketCenterId', '==', userData.marketCenterId), where('userId', 'in', agentIds));
-    } else if (P.isCoach(userData)) {
-        q = query(goalsCollectionRef, where('coachId', '==', user.uid), where('userId', 'in', agentIds));
-    } else if (P.isTeamLeader(userData) && userData.teamId) {
-        q = query(goalsCollectionRef, where('teamId', '==', userData.teamId), where('userId', 'in', agentIds));
+    } else if (P.isTeamLeader(userData)) {
+        // Covers both Coaches and Team Leaders with an 'or' query to satisfy security rules
+        q = query(
+            goalsCollectionRef, 
+            and(
+                or(
+                    where('coachId', '==', user.uid),
+                    where('teamId', '==', userData.teamId || '___none___')
+                ),
+                where('userId', 'in', agentIds)
+            )
+        );
     }
     
     if (!q) {

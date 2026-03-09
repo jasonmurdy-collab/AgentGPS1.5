@@ -16,7 +16,7 @@ interface ScheduleSessionModalProps {
 export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user, userData } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [sessionType, setSessionType] = useState<'client-consult' | 'mc-training'>('client-consult');
+  const [sessionType] = useState<'mc-training'>('mc-training');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
@@ -24,10 +24,6 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
   const [endTime, setEndTime] = useState('');
   const [meetingUrl, setMeetingUrl] = useState('');
   const [linkGenerationType, setLinkGenerationType] = useState<'auto' | 'manual'>('auto');
-  
-  // For client-consult
-  const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
   
   // For mc-training
   const [targetRoles, setTargetRoles] = useState<TeamMember['role'][]>([]);
@@ -43,23 +39,21 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
       let finalMeetingUrl = meetingUrl;
 
       if (linkGenerationType === 'auto') {
-          // Fetch accessToken
+          // Fetch integration status
           const integrationDoc = await getDoc(doc(getFirestoreInstance(), 'userIntegrations', user.uid));
           if (!integrationDoc.exists()) {
               alert("Please connect your Google Calendar in Settings to use auto-generation, or select 'Use Existing Link'.");
               setLoading(false);
               return;
           }
-          const { accessToken } = integrationDoc.data();
           
           // Call backend
           const response = await axios.post('/api/calendar/create-event', {
-              accessToken,
+              userId: user.uid,
               title,
               description,
               startTime: new Date(`${date}T${startTime}`).toISOString(),
               endTime: new Date(`${date}T${endTime}`).toISOString(),
-              clientEmail
           });
           finalMeetingUrl = response.data.hangoutLink;
       }
@@ -83,7 +77,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
           notificationSent: true,
           sentAt: new Date().toISOString()
         },
-        ...(sessionType === 'client-consult' ? { clientName, clientEmail } : { targetAudience: { roles: targetRoles } })
+        targetAudience: { roles: targetRoles }
       };
 
       const db = getFirestoreInstance();
@@ -116,22 +110,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
 
         <form onSubmit={handleSchedule} className="p-6 space-y-6 overflow-y-auto max-h-[80vh]">
           {/* Session Type Toggle */}
-          <div className="flex p-1 bg-surface-hover rounded-xl">
-            <button
-              type="button"
-              onClick={() => setSessionType('client-consult')}
-              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${sessionType === 'client-consult' ? 'bg-surface text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
-            >
-              1-on-1 Consultation
-            </button>
-            <button
-              type="button"
-              onClick={() => setSessionType('mc-training')}
-              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${sessionType === 'mc-training' ? 'bg-surface text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
-            >
-              MC Live Training
-            </button>
-          </div>
+          {/* Session type is restricted to MC Training only */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
@@ -242,33 +221,7 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
             )}
           </div>
 
-          {sessionType === 'client-consult' ? (
-            <div className="bg-surface-hover p-6 rounded-2xl space-y-4">
-              <div className="flex items-center gap-2 text-primary">
-                <Users size={20} />
-                <h3 className="font-bold">Client Information</h3>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                <input
-                  required
-                  type="text"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Client Full Name"
-                  className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                />
-                <input
-                  required={sessionType === 'client-consult'}
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="Client Email Address"
-                  className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="bg-surface-hover p-6 rounded-2xl space-y-4">
+          <div className="bg-surface-hover p-6 rounded-2xl space-y-4">
               <div className="flex items-center gap-2 text-primary">
                 <Globe size={20} />
                 <h3 className="font-bold">Audience Targeting</h3>
@@ -295,7 +248,6 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({ isOp
                 This session will appear on the LMS dashboard for all users with the selected roles in your Market Center.
               </p>
             </div>
-          )}
 
           <div className="pt-4">
             <button

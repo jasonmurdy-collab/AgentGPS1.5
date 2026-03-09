@@ -7,6 +7,9 @@ import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from './config';
 
 let app: FirebaseApp | undefined;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 let firebaseInitializationError: string | null = null;
 
 const getApp = (): FirebaseApp | undefined => {
@@ -18,21 +21,31 @@ const getApp = (): FirebaseApp | undefined => {
     // If an app is already initialized (e.g., via HMR), use it.
     if (getApps().length > 0) {
         app = getApps()[0];
-        return app;
+    } else {
+        // Try to initialize the app
+        try {
+            console.log("Initializing Firebase with config:", {
+                projectId: firebaseConfig.projectId,
+                authDomain: firebaseConfig.authDomain,
+                apiKey: firebaseConfig.apiKey ? "PRESENT" : "MISSING"
+            });
+            app = initializeApp(firebaseConfig);
+        } catch (e) {
+            firebaseInitializationError = `Firebase initialization failed: ${(e as Error).message}`;
+            console.error(firebaseInitializationError);
+            app = undefined;
+        }
     }
 
-    // Try to initialize the app
-    try {
-        console.log("Initializing Firebase with config:", {
-            projectId: firebaseConfig.projectId,
-            authDomain: firebaseConfig.authDomain,
-            apiKey: firebaseConfig.apiKey ? "PRESENT" : "MISSING"
+    if (app) {
+        auth = getAuth(app);
+        db = getFirestore(app);
+        storage = getStorage(app);
+        
+        // Try to set persistence to ensure it's working
+        setPersistence(auth, browserLocalPersistence).catch(err => {
+            console.warn("Auth persistence failed to set:", err);
         });
-        app = initializeApp(firebaseConfig);
-    } catch (e) {
-        firebaseInitializationError = `Firebase initialization failed: ${(e as Error).message}`;
-        console.error(firebaseInitializationError);
-        app = undefined;
     }
 
     return app;
@@ -41,28 +54,18 @@ const getApp = (): FirebaseApp | undefined => {
 
 // Getter for Auth instance
 export const getAuthInstance = (): Auth | null => {
-  const firebaseApp = getApp();
-  if (!firebaseApp) return null;
-  const auth = getAuth(firebaseApp);
-  
-  // Try to set persistence to ensure it's working
-  setPersistence(auth, browserLocalPersistence).catch(err => {
-    console.warn("Auth persistence failed to set:", err);
-  });
-  
+  getApp();
   return auth;
 };
 
 // Getter for Firestore instance
 export const getFirestoreInstance = (): Firestore | null => {
-  const firebaseApp = getApp();
-  if (!firebaseApp) return null;
-  return getFirestore(firebaseApp);
+  getApp();
+  return db;
 };
 
 // Getter for Storage instance
 export const getStorageInstance = (): FirebaseStorage | null => {
-  const firebaseApp = getApp();
-  if (!firebaseApp) return null;
-  return getStorage(firebaseApp);
+  getApp();
+  return storage;
 };

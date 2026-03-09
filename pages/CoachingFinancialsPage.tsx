@@ -148,7 +148,11 @@ const CoachingFinancialsPage: React.FC = () => {
                 const agentIds = contributingAgents.map(a => a.id);
                 for (let i = 0; i < agentIds.length; i += 30) {
                     const chunk = agentIds.slice(i, i + 30);
-                    const q = query(transactionsRef, where('userId', 'in', chunk));
+                    const q = query(
+                        transactionsRef, 
+                        where('coachId', '==', user.uid),
+                        where('userId', 'in', chunk)
+                    );
                     const querySnapshot = await getDocs(q);
                     
                     querySnapshot.docs.forEach(doc => {

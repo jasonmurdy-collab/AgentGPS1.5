@@ -229,7 +229,7 @@ const SlideViewer: React.FC<{ content: string }> = ({ content }) => {
         );
     }
     return (
-        <iframe src={content} className="w-full h-[600px] rounded-lg border border-border bg-surface" title="Slide Deck" />
+        <iframe src={content} className="w-full aspect-video rounded-lg border border-border bg-surface" title="Slide Deck" />
     );
 };
 
@@ -565,15 +565,15 @@ const PlaybookViewerPage: React.FC = () => {
     const totalLessons = allLessonsFlat.length;
 
     return (
-        <div className="h-full flex flex-col">
-            <header className="p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <header className="p-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
                 <Link to="/resource-library" className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline mb-4"><ArrowLeft size={16}/> Back to My Growth</Link>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-text-primary">{playbook.title}</h1>
                 <p className="text-sm text-text-secondary mt-1">{playbook.description}</p>
             </header>
             
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden px-4 sm:px-6 lg:px-8 pb-8 gap-6">
-                <nav className={`${isMobileListVisible ? 'block' : 'hidden'} md:block w-full md:w-1/3 lg:w-1/4 bg-surface rounded-2xl p-4 flex flex-col overflow-y-auto`}>
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden px-4 sm:px-6 lg:px-8 pb-8 gap-6 min-h-0">
+                <nav className={`${isMobileListVisible ? 'block' : 'hidden'} md:block w-full md:w-1/3 lg:w-1/4 bg-surface rounded-2xl p-4 flex flex-col overflow-y-auto min-h-0`}>
                     <h2 className="text-lg font-bold mb-3 flex-shrink-0">Contents</h2>
                     <div className="flex-grow overflow-y-auto pr-2 space-y-4">
                         {playbook.modules.map(module => (
@@ -601,10 +601,10 @@ const PlaybookViewerPage: React.FC = () => {
                     </div>
                 </nav>
 
-                <main className={`${isMobileListVisible ? 'hidden' : 'block'} md:block w-full md:w-2/3 lg:w-3/4 bg-surface rounded-2xl flex flex-col overflow-hidden`}>
+                <main className={`${isMobileListVisible ? 'hidden' : 'block'} md:block w-full md:w-2/3 lg:w-3/4 bg-surface rounded-2xl flex flex-col overflow-hidden min-h-0`}>
                     {activeLesson ? (
                         <>
-                            <div className="p-6 flex-grow overflow-y-auto">
+                            <div className="p-6 flex-grow overflow-y-auto min-h-0">
                                 <button onClick={() => setIsMobileListVisible(true)} className="md:hidden flex items-center gap-2 text-sm font-semibold text-primary hover:underline mb-4">
                                     <ArrowLeft size={16}/> Back to Contents
                                 </button>

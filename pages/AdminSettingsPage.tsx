@@ -385,9 +385,11 @@ const CommunicationCenter: React.FC = () => {
 };
 
 const LiveSessionsManagement: React.FC = () => {
+    const { userData } = useAuth();
     const [sessions, setSessions] = useState<LiveSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const isLeadership = P.isTeamLeader(userData) || P.isCoach(userData);
 
     useEffect(() => {
         const fetchSessions = async () => {
@@ -416,12 +418,14 @@ const LiveSessionsManagement: React.FC = () => {
                     <VideoIcon className="text-accent-secondary" />
                     <h2 className="text-2xl font-bold">Live Sessions</h2>
                 </div>
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 bg-primary text-on-accent px-4 py-2 rounded-xl font-bold text-sm hover:bg-opacity-90 transition-all"
-                >
-                    <Plus size={18} /> Schedule New Session
-                </button>
+                {isLeadership && (
+                    <button 
+                        onClick={() => setIsModalOpen(true)}
+                        className="flex items-center gap-2 bg-primary text-on-accent px-4 py-2 rounded-xl font-bold text-sm hover:bg-opacity-90 transition-all"
+                    >
+                        <Plus size={18} /> Schedule New Session
+                    </button>
+                )}
             </div>
 
             <div className="space-y-3">

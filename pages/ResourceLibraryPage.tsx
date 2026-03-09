@@ -146,8 +146,8 @@ const ResourceLibraryPage: React.FC = () => {
     }
 
     return (
-        <div className="h-full flex flex-col">
-            <header className="p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <header className="p-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
                     <BookOpen size={48} className="text-accent-secondary" />
                     My Growth
@@ -155,7 +155,7 @@ const ResourceLibraryPage: React.FC = () => {
                 <p className="text-lg text-text-secondary mt-1">Your central hub for playbooks, training, and lead generation strategies.</p>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-8">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-8 min-h-0">
                 {nextLessonInfo && <UpNextCard playbook={nextLessonInfo.playbook} nextLesson={nextLessonInfo.nextLesson} />}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

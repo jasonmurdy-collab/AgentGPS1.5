@@ -3,10 +3,10 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth, P } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import type { Playbook, LearningPath, NewAgentResources, NewAgentGoalTemplate, NewAgentHomework, NewAgentResourceLink, ChecklistItem, TeamMember } from '../types';
-import { Edit3, Plus, Edit, Trash2, BookOpen, Route, Sparkles, Rocket, Target, ClipboardList, Link as LinkIcon, ListChecks, CheckSquare } from 'lucide-react';
+import type { Playbook, LearningPath, NewAgentGoalTemplate, TeamMember } from '../types';
+import { Edit3, Plus, Edit, Trash2, BookOpen, Route, Sparkles, Rocket, Target, CheckSquare } from 'lucide-react';
 import { getFirestoreInstance } from '../firebaseConfig';
-import { collection, query, where, onSnapshot, orderBy, doc, deleteDoc, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc, deleteDoc, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
 import { generatePlaybookFromOutline, generateGoalSuggestions } from '../lib/gemini';
 import { createPortal } from 'react-dom';
@@ -141,7 +141,7 @@ interface ManagedAgent {
     onboardingChecklistProgress?: string[];
 }
 
-const NewAgentResourcesCard: React.FC<{
+const AgentResourcesCard: React.FC<{
     agent: ManagedAgent;
     learningPaths: LearningPath[];
     playbooks: Playbook[];
@@ -175,7 +175,7 @@ const NewAgentResourcesCard: React.FC<{
     return (
         <Card>
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">New Agent Resources: {agent.name}</h3>
+                <h3 className="text-xl font-bold">Resources: {agent.name}</h3>
                 <div className="flex items-center gap-2">
                     <label htmlFor={`toggle-new-agent-${agent.id}`} className="text-sm text-text-secondary">New Agent</label>
                     <button
@@ -192,49 +192,48 @@ const NewAgentResourcesCard: React.FC<{
                     </button>
                 </div>
             </div>
-            {agent.isNewAgent && (
-                <div className="space-y-4 pt-4 border-t border-border">
-                    <div>
-                        <label htmlFor={`assign-path-${agent.id}`} className="block text-sm font-medium text-text-secondary mb-1">Assign Learning Path</label>
-                        <div className="flex gap-2">
-                            <select
-                                id={`assign-path-${agent.id}`}
-                                value={assignPathId}
-                                onChange={e => setAssignPathId(e.target.value)}
-                                className="flex-1 bg-input border border-border rounded-md p-2"
-                            >
-                                <option value="">-- No Path Assigned --</option>
-                                {learningPaths.map(path => (
-                                    <option key={path.id} value={path.id}>{path.title}</option>
-                                ))}
-                            </select>
-                            <button onClick={handleSavePath} disabled={savingPath || assignPathId === (agent.assignedLearningPathId || '')} className="p-2 bg-primary text-on-accent rounded-md">{savingPath ? <Spinner className="w-5 h-5"/> : <CheckSquare size={20}/>}</button>
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor={`assign-playbook-${agent.id}`} className="block text-sm font-medium text-text-secondary mb-1">Assign Playbook</label>
-                        <div className="flex gap-2">
-                            <select
-                                id={`assign-playbook-${agent.id}`}
-                                value={assignPlaybookId}
-                                onChange={e => setAssignPlaybookId(e.target.value)}
-                                className="flex-1 bg-input border border-border rounded-md p-2"
-                            >
-                                <option value="">-- No Playbook Assigned --</option>
-                                {playbooks.map(pb => (
-                                    <option key={pb.id} value={pb.id}>{pb.title}</option>
-                                ))}
-                            </select>
-                            <button onClick={handleSavePlaybook} disabled={savingPlaybook || assignPlaybookId === (agent.assignedPlaybookId || '')} className="p-2 bg-primary text-on-accent rounded-md">{savingPlaybook ? <Spinner className="w-5 h-5"/> : <CheckSquare size={20}/>}</button>
-                        </div>
-                    </div>
-                     <div>
-                        <button onClick={() => onGenerateGoalSuggestions(agent.id)} className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-border rounded-lg text-sm text-text-secondary hover:border-primary hover:text-primary">
-                            <Target size={16}/> Generate Goal Suggestion
-                        </button>
+            
+            <div className="space-y-4 pt-4 border-t border-border">
+                <div>
+                    <label htmlFor={`assign-path-${agent.id}`} className="block text-sm font-medium text-text-secondary mb-1">Assign Learning Path</label>
+                    <div className="flex gap-2">
+                        <select
+                            id={`assign-path-${agent.id}`}
+                            value={assignPathId}
+                            onChange={e => setAssignPathId(e.target.value)}
+                            className="flex-1 bg-input border border-border rounded-md p-2"
+                        >
+                            <option value="">-- No Path Assigned --</option>
+                            {learningPaths.map(path => (
+                                <option key={path.id} value={path.id}>{path.title}</option>
+                            ))}
+                        </select>
+                        <button onClick={handleSavePath} disabled={savingPath || assignPathId === (agent.assignedLearningPathId || '')} className="p-2 bg-primary text-on-accent rounded-md">{savingPath ? <Spinner className="w-5 h-5"/> : <CheckSquare size={20}/>}</button>
                     </div>
                 </div>
-            )}
+                <div>
+                    <label htmlFor={`assign-playbook-${agent.id}`} className="block text-sm font-medium text-text-secondary mb-1">Assign Playbook</label>
+                    <div className="flex gap-2">
+                        <select
+                            id={`assign-playbook-${agent.id}`}
+                            value={assignPlaybookId}
+                            onChange={e => setAssignPlaybookId(e.target.value)}
+                            className="flex-1 bg-input border border-border rounded-md p-2"
+                        >
+                            <option value="">-- No Playbook Assigned --</option>
+                            {playbooks.map(pb => (
+                                <option key={pb.id} value={pb.id}>{pb.title}</option>
+                            ))}
+                        </select>
+                        <button onClick={handleSavePlaybook} disabled={savingPlaybook || assignPlaybookId === (agent.assignedPlaybookId || '')} className="p-2 bg-primary text-on-accent rounded-md">{savingPlaybook ? <Spinner className="w-5 h-5"/> : <CheckSquare size={20}/>}</button>
+                    </div>
+                </div>
+                    <div>
+                    <button onClick={() => onGenerateGoalSuggestions(agent.id)} className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-border rounded-lg text-sm text-text-secondary hover:border-primary hover:text-primary">
+                        <Target size={16}/> Generate Goal Suggestion
+                    </button>
+                </div>
+            </div>
         </Card>
     );
 };
@@ -251,6 +250,14 @@ const ResourceManagementPage: React.FC = () => {
     const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
     const [goalModalInitialData, setGoalModalInitialData] = useState<Partial<NewAgentGoalTemplate>>({});
     const [targetAgentForGoal, setTargetAgentForGoal] = useState<string | null>(null);
+
+    const [categoryFilter, setCategoryFilter] = useState<string>('All');
+    const categories = useMemo(() => ['All', ...Array.from(new Set(playbooks.map(p => p.category || 'Uncategorized')))], [playbooks]);
+
+    const filteredPlaybooks = useMemo(() => {
+        if (categoryFilter === 'All') return playbooks;
+        return playbooks.filter(p => (p.category || 'Uncategorized') === categoryFilter);
+    }, [playbooks, categoryFilter]);
 
     const fetchResources = useCallback(async () => {
         if (!user || !userData) { setLoading(false); return; }
@@ -322,11 +329,11 @@ const ResourceManagementPage: React.FC = () => {
                 if (contributingAgentIds.length > 0) {
                     agentsToManage = await getUsersByIds(contributingAgentIds);
                 }
-            } else if (userData.marketCenterId && P.isMcAdmin(userData)) {
+            } else if (userData.marketCenterId && (P.isMcAdmin(userData) || P.isCoach(userData))) {
                 const q = query(collection(db, 'users'), where('marketCenterId', '==', userData.marketCenterId));
                 const snapshot = await getDocs(q);
                 agentsToManage = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamMember));
-            } else if (userData.teamId && (P.isTeamLeader(userData) || P.isCoach(userData))) {
+            } else if (userData.teamId && P.isTeamLeader(userData)) {
                 const q = query(collection(db, 'users'), where('teamId', '==', userData.teamId));
                 const snapshot = await getDocs(q);
                 agentsToManage = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamMember));
@@ -471,8 +478,8 @@ const ResourceManagementPage: React.FC = () => {
     const canManageResources = P.canManageResources(userData);
 
     return (
-        <div className="h-full flex flex-col">
-            <header className="p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <header className="p-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
                 <div className="flex justify-between items-start flex-wrap gap-4">
                     <div>
                         <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-text-primary flex items-center gap-4">
@@ -494,17 +501,26 @@ const ResourceManagementPage: React.FC = () => {
                 </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-8">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pb-8 space-y-8 min-h-0">
                 <div>
-                    <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><BookOpen /> Playbooks</h2>
-                    {playbooks.length > 0 ? (
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold flex items-center gap-3"><BookOpen /> Playbooks</h2>
+                        <select 
+                            value={categoryFilter} 
+                            onChange={e => setCategoryFilter(e.target.value)}
+                            className="bg-surface border border-border rounded-lg p-2 text-sm"
+                        >
+                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                    </div>
+                    {filteredPlaybooks.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {playbooks.map(playbook => (
+                            {filteredPlaybooks.map(playbook => (
                                 <PlaybookCard key={playbook.id} playbook={playbook} onDelete={handleDeletePlaybook} />
                             ))}
                         </div>
                     ) : (
-                        <Card><p className="text-center text-text-secondary py-8">No playbooks created yet. Use the "New Playbook" button to get started.</p></Card>
+                        <Card><p className="text-center text-text-secondary py-8">No playbooks found in this category.</p></Card>
                     )}
                 </div>
 
@@ -523,11 +539,11 @@ const ResourceManagementPage: React.FC = () => {
 
                 {canManageResources && (
                      <div>
-                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><Rocket/> New Agent Onboarding & Resources</h2>
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-3"><Rocket/> Agent Learning & Assignments</h2>
                         {managedAgents.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {managedAgents.map(agent => (
-                                    <NewAgentResourcesCard
+                                    <AgentResourcesCard
                                         key={agent.id}
                                         agent={agent}
                                         learningPaths={learningPaths}

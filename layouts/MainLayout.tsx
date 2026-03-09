@@ -6,6 +6,7 @@ import { useAuth, P } from '../contexts/AuthContext';
 import { Spinner } from '../components/ui/Spinner';
 import { BrandedLogo } from '../components/ui/BrandedLogo';
 import { NotificationBell } from '../components/notifications/NotificationBell';
+
 import { getFirestoreInstance } from '../firebaseConfig';
 import { doc, updateDoc, setDoc, collection, query, where, getDocs, increment } from 'firebase/firestore';
 import {
@@ -237,7 +238,7 @@ export const MainLayout: React.FC = () => {
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto">
+                <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Spinner className="w-8 h-8" /></div>}>
                         <Outlet />
                     </Suspense>

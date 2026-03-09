@@ -97,6 +97,7 @@ export interface DashboardWidgetConfig {
   id: string;
   span: 1 | 2 | 3;
   visible: boolean;
+  order: number;
 }
 
 // Add missing types that are used in the app
@@ -362,6 +363,7 @@ export interface Playbook {
   teamId?: string | null;
   title: string;
   description: string;
+  category?: string;
   createdAt: string | any; // Can be string or Firestore serverTimestamp
   modules: Module[];
 }
