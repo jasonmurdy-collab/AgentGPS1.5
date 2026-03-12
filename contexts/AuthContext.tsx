@@ -225,36 +225,89 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLoadingAgents(true);
         setAgentsError(null);
 
-        let q;
         const usersRef = collection(db, 'users');
 
-        if (P.isSuperAdmin(userData)) {
-            q = query(usersRef);
-        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-            q = query(usersRef, where('marketCenterId', '==', userData.marketCenterId));
-        } else if (P.isTeamLeader(userData) && userData.teamId) {
-            q = query(usersRef, or(where('teamId', '==', userData.teamId), where('coachId', '==', user.uid)));
-        } else if (P.isCoach(userData)) {
-            q = query(usersRef, where('coachId', '==', user.uid));
-        }
+        // Helper to fetch agents by IDs (bypasses collection query rule issues for managers)
+        const fetchAgentsByIds = async (ids: string[]) => {
+            try {
+                const agentsData = await Promise.all(
+                    ids.filter(id => id !== user.uid).map(async (id) => {
+                        const docSnap = await getDoc(doc(db, 'users', id));
+                        return docSnap.exists() ? processUserDoc(docSnap) : null;
+                    })
+                );
+                setManagedAgents(agentsData.filter((a): a is TeamMember => a !== null));
+                setLoadingAgents(false);
+            } catch (err) {
+                console.error("Error fetching agents by IDs:", err);
+                setAgentsError("Failed to load agents.");
+                setLoadingAgents(false);
+            }
+        };
 
-        if (!q) {
+        let unsubscribe: (() => void) | undefined;
+
+        if (P.isSuperAdmin(userData)) {
+            const q = query(usersRef);
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                const agents = snapshot.docs.map(processUserDoc);
+                setManagedAgents(agents.filter(a => a.id !== user.uid));
+                setLoadingAgents(false);
+            }, (err) => {
+                console.error("Error fetching managed agents (Super Admin):", err);
+                setAgentsError("Failed to load agents.");
+                setLoadingAgents(false);
+            });
+        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+            // MC Admins fetch all users in their MC. 
+            // Since there's no central list of all MC users, we use a query.
+            // If this fails, we might need to denormalize the user list on the MC doc.
+            const q = query(usersRef, where('marketCenterId', '==', userData.marketCenterId));
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                const agents = snapshot.docs.map(processUserDoc);
+                setManagedAgents(agents.filter(a => a.id !== user.uid));
+                setLoadingAgents(false);
+            }, (err) => {
+                console.error("Error fetching managed agents (MC Admin):", err);
+                // Fallback: If query fails, it's likely a permission issue with collection queries.
+                setAgentsError("Failed to load agents via query.");
+                setLoadingAgents(false);
+            });
+        } else if (P.isTeamLeader(userData) && userData.teamId) {
+            // Team Leaders fetch the team document to get member IDs, then fetch members individually.
+            // This bypasses collection query limitations in rules.
+            const teamUnsubscribe = onSnapshot(doc(db, 'teams', userData.teamId), (docSnap) => {
+                if (docSnap.exists()) {
+                    const memberIds = docSnap.data().memberIds || [];
+                    fetchAgentsByIds(memberIds);
+                } else {
+                    setManagedAgents([]);
+                    setLoadingAgents(false);
+                }
+            }, (err) => {
+                console.error("Error fetching team for Team Leader:", err);
+                setAgentsError("Failed to load team members.");
+                setLoadingAgents(false);
+            });
+            unsubscribe = teamUnsubscribe;
+        } else if (P.isCoach(userData)) {
+            // Coaches fetch by coachId. This query is safe because of the direct coachId rule.
+            const q = query(usersRef, where('coachId', '==', user.uid));
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                const agents = snapshot.docs.map(processUserDoc);
+                setManagedAgents(agents.filter(a => a.id !== user.uid));
+                setLoadingAgents(false);
+            }, (err) => {
+                console.error("Error fetching managed agents (Coach):", err);
+                setAgentsError("Failed to load agents.");
+                setLoadingAgents(false);
+            });
+        } else {
             setManagedAgents([]);
             setLoadingAgents(false);
-            return;
         }
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const agents = snapshot.docs.map(processUserDoc);
-            setManagedAgents(agents.filter(a => a.id !== user.uid));
-            setLoadingAgents(false);
-        }, (err) => {
-            console.error("Error fetching managed agents:", err);
-            setAgentsError("Failed to load agents.");
-            setLoadingAgents(false);
-        });
-
-        return unsubscribe;
+        return () => { if (unsubscribe) unsubscribe(); };
     }, [user, userData]);
 
     const signUpWithEmail = useCallback(async (email: string, password: string, name: string, options?: { role?: TeamMember['role']; teamId?: string; marketCenterId?: string; }) => {
@@ -484,24 +537,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const db = getFirestoreInstance();
         if (!db || managedAgents.length === 0 || !userData) return {};
         
-        let q;
-        if (P.isSuperAdmin(userData)) {
-            q = query(collection(db, 'dailyTrackers'), limit(500));
-        } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
-            q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId));
-        } else if (userData.role === 'productivity_coach') {
-            q = query(collection(db, 'dailyTrackers'), where('coachId', '==', user?.uid));
-        } else if (userData.role === 'team_leader' && userData.teamId) {
-            q = query(collection(db, 'dailyTrackers'), where('teamId', '==', userData.teamId));
-        }
-
-        const snap = await getDocs(q);
         const res: Record<string, DailyTrackerData[]> = {};
-        snap.docs.forEach(doc => {
-            const data = processDailyTrackerDoc(doc);
-            if (!res[data.userId]) res[data.userId] = [];
-            res[data.userId].push(data);
-        });
+        
+        // Fetch logs for each agent individually to handle permission rules more reliably
+        await Promise.all(managedAgents.map(async (agent) => {
+            try {
+                let q;
+                if (P.isSuperAdmin(userData)) {
+                    q = query(collection(db, 'dailyTrackers'), where('userId', '==', agent.id), limit(100));
+                } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+                    q = query(collection(db, 'dailyTrackers'), where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', agent.id));
+                } else if (P.isCoach(userData) && agent.coachId === user?.uid) {
+                    q = query(collection(db, 'dailyTrackers'), where('coachId', '==', user?.uid), where('userId', '==', agent.id));
+                } else if (P.isTeamLeader(userData) && userData.teamId === agent.teamId) {
+                    q = query(collection(db, 'dailyTrackers'), where('teamId', '==', userData.teamId), where('userId', '==', agent.id));
+                } else {
+                    // Fallback or restricted access
+                    return;
+                }
+
+                const snap = await getDocs(q);
+                res[agent.id] = snap.docs.map(processDailyTrackerDoc);
+            } catch (err) {
+                console.error(`Error fetching habit logs for agent ${agent.id}:`, err);
+                res[agent.id] = [];
+            }
+        }));
+        
         return res;
     }, [managedAgents, userData, user]);
 
@@ -564,21 +626,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getTransactionsForManagedUsers = useCallback(async () => {
         const db = getFirestoreInstance();
         if (!db || managedAgents.length === 0 || !userData) return [];
-        const agentIds = managedAgents.map(a => a.id);
+        
         const allTransactions: Transaction[] = [];
         
-        // Chunk the agent IDs for the 'in' query (limit 30)
-        for (let i = 0; i < agentIds.length; i += 30) {
-            const chunk = agentIds.slice(i, i + 30);
-            
-            const q = query(collection(db, 'transactions'), where('userId', 'in', chunk));
+        // Fetch transactions for each agent individually
+        await Promise.all(managedAgents.map(async (agent) => {
+            try {
+                let q;
+                if (P.isSuperAdmin(userData)) {
+                    q = query(collection(db, 'transactions'), where('userId', '==', agent.id));
+                } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
+                    q = query(collection(db, 'transactions'), where('marketCenterId', '==', userData.marketCenterId), where('userId', '==', agent.id));
+                } else if (P.isCoach(userData) && agent.coachId === user?.uid) {
+                    q = query(collection(db, 'transactions'), where('coachId', '==', user?.uid), where('userId', '==', agent.id));
+                } else if (P.isTeamLeader(userData) && userData.teamId === agent.teamId) {
+                    q = query(collection(db, 'transactions'), where('teamId', '==', userData.teamId), where('userId', '==', agent.id));
+                } else {
+                    return;
+                }
 
-            const snap = await getDocs(q);
-            allTransactions.push(...snap.docs.map(processTransactionDoc));
-        }
+                const snap = await getDocs(q);
+                allTransactions.push(...snap.docs.map(processTransactionDoc));
+            } catch (err) {
+                console.error(`Error fetching transactions for agent ${agent.id}:`, err);
+            }
+        }));
         
         return allTransactions;
-    }, [managedAgents, userData]);
+    }, [managedAgents, userData, user]);
 
     const getTransactionsForUser = useCallback(async (userId: string) => {
         const db = getFirestoreInstance();

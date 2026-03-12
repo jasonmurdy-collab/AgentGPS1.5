@@ -133,18 +133,32 @@ const CoachHubPage: React.FC = () => {
     const [selectedAgent, setSelectedAgent] = useState<TeamMember | null>(null);
 
     const fetchData = useCallback(async () => {
-        if (loadingAgents || !userData) return;
-        setLoadingData(true);
-        const [goalsData, logsData, transactionsData] = await Promise.all([
-            Promise.all(managedAgents.map(agent => getGoalsForUser(agent.id).then(goals => ({ agentId: agent.id, goals })))),
-            getHabitLogsForManagedUsers(),
-            getTransactionsForManagedUsers()
-        ]);
+        // Wait for agents to finish loading before proceeding
+        if (loadingAgents) return;
+        
+        // If auth loaded but no user data exists, stop loading
+        if (!userData) {
+            setLoadingData(false);
+            return;
+        }
 
-        setAgentGoals(goalsData.reduce((acc, { agentId, goals }) => ({ ...acc, [agentId]: goals }), {}));
-        setAgentHabitLogs(logsData);
-        setAllTransactions(transactionsData);
-        setLoadingData(false);
+        try {
+            setLoadingData(true);
+            const [goalsData, logsData, transactionsData] = await Promise.all([
+                Promise.all(managedAgents.map(agent => getGoalsForUser(agent.id).then(goals => ({ agentId: agent.id, goals })))),
+                getHabitLogsForManagedUsers(),
+                getTransactionsForManagedUsers()
+            ]);
+
+            setAgentGoals(goalsData.reduce((acc, { agentId, goals }) => ({ ...acc, [agentId]: goals }), {}));
+            setAgentHabitLogs(logsData);
+            setAllTransactions(transactionsData);
+        } catch (error) {
+            console.error("Error fetching coach hub data:", error);
+        } finally {
+            // This guarantees the spinner turns off no matter what happens above
+            setLoadingData(false);
+        }
     }, [loadingAgents, userData, managedAgents, getGoalsForUser, getHabitLogsForManagedUsers, getTransactionsForManagedUsers]);
 
     useEffect(() => {

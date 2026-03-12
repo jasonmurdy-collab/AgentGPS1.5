@@ -331,24 +331,33 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const agentProfile = await getUserById(userId);
         if (!agentProfile) return [];
 
-        if (P.isSuperAdmin(userData)) {
-            q = query(goalsCollectionRef, where("userId", "==", userId));
-        } else if (P.isMcAdmin(userData) && userData.marketCenterId === agentProfile.marketCenterId) {
-            q = query(goalsCollectionRef, where("userId", "==", userId), where("marketCenterId", "==", userData.marketCenterId));
-        } else if (P.isCoach(userData) && agentProfile.coachId === user.uid) {
-            q = query(goalsCollectionRef, where("userId", "==", userId), where("coachId", "==", user.uid));
-        } else if (P.isTeamLeader(userData) && userData.teamId === agentProfile.teamId) {
-            q = query(goalsCollectionRef, where("userId", "==", userId), where("teamId", "==", userData.teamId));
-        } else {
-            return []; // Not a manager of this agent, return empty array.
+        try {
+            if (P.isSuperAdmin(userData)) {
+                q = query(goalsCollectionRef, where("userId", "==", userId));
+            } else if (P.isMcAdmin(userData) && userData.marketCenterId === agentProfile.marketCenterId) {
+                q = query(goalsCollectionRef, where("userId", "==", userId), where("marketCenterId", "==", userData.marketCenterId));
+            } else if (P.isCoach(userData) && agentProfile.coachId === user.uid) {
+                q = query(goalsCollectionRef, where("userId", "==", userId), where("coachId", "==", user.uid));
+            } else if (P.isTeamLeader(userData) && userData.teamId === agentProfile.teamId) {
+                q = query(goalsCollectionRef, where("userId", "==", userId), where("teamId", "==", userData.teamId));
+            } else {
+                return []; // Not a manager of this agent, return empty array.
+            }
+
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(processGoalDoc);
+        } catch (error) {
+            console.warn("Collection query failed for goals, falling back to individual fetch:", error);
+            // Fallback: If collection query fails (likely due to rules), we can't easily fetch all goals
+            // unless we know the IDs. Since we don't, we return empty or try a broader query if allowed.
+            return [];
         }
     } else {
         // Fetching own goals
         q = query(goalsCollectionRef, where("userId", "==", userId));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(processGoalDoc);
     }
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(processGoalDoc);
   }, [user, userData, getUserById]);
 
   const getPublicGoals = useCallback(async (): Promise<Goal[]> => {

@@ -45,7 +45,12 @@ service cloud.firestore {
 
     // Users
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isOwnerOrManager(resource.data, userId) || isMCManager(resource.data.get('marketCenterId', null)));
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        request.auth.uid == resource.data.get('coachId', null) ||
+        isOwnerOrManager(resource.data, userId) || 
+        isMCManager(resource.data.get('marketCenterId', null))
+      );
       allow create: if isSignedIn() && request.resource.data.get('isSuperAdmin', false) == false;
       allow update: if isSignedIn() && (
         isSuperAdmin() ||
@@ -60,6 +65,8 @@ service cloud.firestore {
     // Goals
     match /goals/{goalId} {
       allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.get('userId', null) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
         isOwnerOrManager(resource.data, resource.data.get('userId', null)) || 
         resource.data.get('visibility', 'solo') == 'public'
       );
@@ -70,7 +77,11 @@ service cloud.firestore {
 
     // Transactions
     match /transactions/{txId} {
-      allow read: if isSignedIn() && isOwnerOrManager(resource.data, resource.data.get('userId', null));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.get('userId', null) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        isOwnerOrManager(resource.data, resource.data.get('userId', null))
+      );
       allow create: if isSignedIn() && isOwnerOrManager(request.resource.data, request.resource.data.get('userId', null));
       allow update: if isSignedIn() && isOwnerOrManager(resource.data, resource.data.get('userId', null)) && isOwnerOrManager(request.resource.data, request.resource.data.get('userId', null));
       allow delete: if isSignedIn() && isOwnerOrManager(resource.data, resource.data.get('userId', null));
@@ -78,7 +89,11 @@ service cloud.firestore {
 
     // Daily Trackers (Habits)
     match /dailyTrackers/{trackerId} {
-      allow read: if isSignedIn() && isOwnerOrManager(resource.data, resource.data.get('userId', null));
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.get('userId', null) ||
+        request.auth.uid == resource.data.get('coachId', null) ||
+        isOwnerOrManager(resource.data, resource.data.get('userId', null))
+      );
       allow create: if isSignedIn() && isOwnerOrManager(request.resource.data, request.resource.data.get('userId', null));
       allow update: if isSignedIn() && isOwnerOrManager(resource.data, resource.data.get('userId', null)) && isOwnerOrManager(request.resource.data, request.resource.data.get('userId', null));
       allow delete: if isSignedIn() && isOwnerOrManager(resource.data, resource.data.get('userId', null));

@@ -68,15 +68,32 @@ const CoachTransactionsPage: React.FC = () => {
                 } else if (P.isMcAdmin(userData) && userData.marketCenterId) {
                     const tSnap = await getDocs(query(transactionsRef, where('marketCenterId', '==', userData.marketCenterId)));
                     allTransactions.push(...tSnap.docs.map(processTransactionDoc));
-                } else if (P.isCoach(userData) || P.isTeamLeader(userData)) {
-                    // Use managed agents list for both Coaches and Team Leaders to be consistent and robust
+                } else if (P.isCoach(userData) || (P.isTeamLeader(userData) && userData.teamId)) {
+                    // Use managed agents list for both Coaches and Team Leaders
                     const agentIds = agents.map(a => a.id);
                     if (agentIds.length > 0) {
                         for (let i = 0; i < agentIds.length; i += 30) {
                             const chunk = agentIds.slice(i, i + 30);
-                            
-                            const q = query(transactionsRef, where('userId', 'in', chunk));
-                            
+                            let q;
+                            // Coaches have market-center level access to their assigned agents
+                            if (P.isCoach(userData) && userData.marketCenterId) {
+                                q = query(
+                                    transactionsRef,
+                                    where('marketCenterId', '==', userData.marketCenterId),
+                                    where('userId', 'in', chunk)
+                                );
+                            }
+                            // Team Leaders have team-level access to their assigned agents
+                            else if (P.isTeamLeader(userData) && userData.teamId) {
+                                q = query(
+                                    transactionsRef,
+                                    where('teamId', '==', userData.teamId),
+                                    where('userId', 'in', chunk)
+                                );
+                            } else {
+                                // Fallback catch-all
+                                q = query(transactionsRef, where('userId', 'in', chunk));
+                            }
                             const tSnap = await getDocs(q);
                             allTransactions.push(...tSnap.docs.map(processTransactionDoc));
                         }
